@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>exact Hydra pixel parity</title>
+  <style>
+    html, body { margin: 0; background: #000; color: #ccc; font: 13px/1.4 monospace; }
+    canvas { display: none; }
+    #log { padding: 12px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <canvas id="legacy" width="64" height="64"></canvas>
+  <canvas id="ported" width="64" height="64"></canvas>
+  <canvas id="native-reference" width="64" height="64"></canvas>
+  <canvas id="native-interface" width="64" height="64"></canvas>
+  <div id="log"></div>
+  <script src="./.legacy-hydra-synth.js"></script>
+  <script type="module">
+    import {
+      DEFAULT_CDN,
+      loadEngine,
+      loadHydraEffects
+    } from '../src/index.js'
+    import glslFunctions from '../src/glsl/glsl-functions.js'
+    import { isExecutableHydraEffect } from '../src/engine/hydraGlsl.js'
+
+    const log = document.getElementById('log')
+    const emit = (line) => {
+      const div = document.createElement('div')
+      div.textContent = line
+      log.appendChild(div)
+    }
+
+    function dslLiteral(input) {
+      const value = input.default
+      if (input.type === 'vec4') {
+        const values = Array.isArray(value) ? value : [value, value, value, value]
+        return `vec4(${values.join(', ')})`
+      }
+      return String(value)
+    }
+
+    function effectCall(effect) {
+      const name = effect.name === 'osc' ? 'hydraOsc' : effect.name
+      const args = effect.inputs.map(input => `${input.name}: ${dslLiteral(input)}`)
+      return `${name}(${args.join(', ')})`
+    }
+
+    const FIXTURES = glslFunctions()
+      .filter(effect => isExecutableHydraEffect(effect) && !['src', 'prev'].includes(effect.name))
+      .map(effect => {
+        const args = effect.inputs.map(input => input.default)
+        const call = effectCall(effect)
+        const nestedDsl = 'shape(sides: 5, radius: 0.3, smoothing: 0.01)'
+        const nestedLegacy = hydra => hydra.synth.shape(5, 0.3, 0.01)
+
+        if (effect.type === 'src') {
+          return {
+            name: `${effect.name}_${effect.type}`,
+            legacy: hydra => hydra.synth[effect.name](...args),
+            dsl: call
+          }
+        }
+        if (effect.type === 'combine' || effect.type === 'combineCoord') {
+          return {
+            name: `${effect.name}_${effect.type}`,
+            legacy: hydra => hydra.synth.gradient(0)[effect.name](nestedLegacy(hydra), ...args),
+            dsl: `gradient(speed: 0).${effect.name}(tex: ${nestedDsl}${args.length ? `, ${effect.inputs.map(input => `${input.name}: ${dslLiteral(input)}`).join(', ')}` : ''})`
+          }
+        }
+        return {
+          name: `${effect.name}_${effect.type}`,
+          legacy: hydra => hydra.synth.gradient(0)[effect.name](...args),
+          dsl: `gradient(speed: 0).${call}`
+        }
+      })
+
+    FIXTURES.push(
+      {
+        name: 'osc_nonzero_time',
+        time: 0.25,
+        legacy: hydra => hydra.synth.osc(30, 0.2, 0.1),
+        dsl: 'hydraOsc(frequency: 30, sync: 0.2, offset: 0.1)'
+      },
+      {
+        name: 'rotate_animated_parameter',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).rotate(30, 0),
+        dsl: 'gradient(speed: 0).rotate(angle: osc(min: 0.2, max: 0.4, speed: 1), speed: 0)'
+      },
+      {
+        name: 'src_external_surface',
+        setupFrames: 2,
+        legacySetup: hydra => hydra.synth.gradient(0).out(hydra.o[1]),
+        dslSetup: 'gradient(speed: 0).write(o1)',
+        legacy: hydra => hydra.synth.src(hydra.o[1]),
+        dsl: 'src(tex: o1)'
+      },
+      {
+        name: 'prev_feedback_surface',
+        setupFrames: 2,
+        legacySetup: hydra => hydra.synth.gradient(0).out(hydra.o[0]),
+        dslSetup: 'gradient(speed: 0).write(o0)',
+        legacy: hydra => hydra.synth.prev(),
+        dsl: 'prev()'
+      }
+    )
+
+    function pixels(canvas) {
+      const copy = document.createElement('canvas')
+      copy.width = canvas.width
+      copy.height = canvas.height
+      const context = copy.getContext('2d', { willReadFrequently: true })
+      context.drawImage(canvas, 0, 0)
+      return context.getImageData(0, 0, copy.width, copy.height).data
+    }
+
+    function compare(actual, expected) {
+      let differingBytes = 0
+      let maxDelta = 0
+      for (let i = 0; i < actual.length; i++) {
+        const delta = Math.abs(actual[i] - expected[i])
+        if (delta !== 0) differingBytes++
+        if (delta > maxDelta) maxDelta = delta
+      }
+      const samplePixel = (buffer, x, y) => {
+        const offset = (y * 64 + x) * 4
+        return Array.from(buffer.slice(offset, offset + 4))
+      }
+      return {
+        differingBytes,
+        maxDelta,
+        totalBytes: actual.length,
+        samples: [
+          { at: [0, 0], actual: samplePixel(actual, 0, 0), expected: samplePixel(expected, 0, 0) },
+          { at: [63, 0], actual: samplePixel(actual, 63, 0), expected: samplePixel(expected, 63, 0) },
+          { at: [0, 63], actual: samplePixel(actual, 0, 63), expected: samplePixel(expected, 0, 63) },
+          { at: [63, 63], actual: samplePixel(actual, 63, 63), expected: samplePixel(expected, 63, 63) }
+        ]
+      }
+    }
+
+    function errorText(error) {
+      if (error && typeof error.message === 'string') return error.message
+      if (Array.isArray(error?.diagnostics)) {
+        return error.diagnostics.map(item => item.message || JSON.stringify(item)).join('; ')
+      }
+      if (Array.isArray(error?.errors)) {
+        return error.errors.map(item => item.message || JSON.stringify(item)).join('; ')
+      }
+      try { return JSON.stringify(error) } catch (_) { return String(error) }
+    }
+
+    function createLegacy(canvas) {
+      const LegacyHydra = window.Hydra
+      return new LegacyHydra({
+        canvas,
+        width: 64,
+        height: 64,
+        makeGlobal: false,
+        autoLoop: false,
+        detectAudio: false,
+        enableStreamCapture: false,
+        precision: 'highp'
+      })
+    }
+
+    function renderLegacy(hydra, canvas, fixture) {
+      hydra.synth.time = 0
+      if (fixture.legacySetup) {
+        fixture.legacySetup(hydra)
+        for (let i = 0; i < fixture.setupFrames; i++) hydra.tick(0)
+      }
+      fixture.legacy(hydra).out(hydra.o[0])
+      hydra.tick((fixture.time || 0) * 1000)
+      return pixels(canvas)
+    }
+
+    async function createRenderer(canvas, engine) {
+      const renderer = new engine.CanvasRenderer({
+        canvas,
+        width: 64,
+        height: 64,
+        basePath: DEFAULT_CDN,
+        bundlePath: `${DEFAULT_CDN}/effects`,
+        useBundles: true,
+        preferWebGPU: false,
+        autoStart: false
+      })
+      await renderer.loadManifest()
+      return renderer
+    }
+
+    async function createPorted(canvas) {
+      const engine = await loadHydraEffects()
+      return createRenderer(canvas, engine)
+    }
+
+    async function renderPorted(renderer, canvas, fixture) {
+      if (fixture.dslSetup) {
+        await renderer.compile(`search hydra\n${fixture.dslSetup}`)
+        renderer.pipeline.globalUniforms.time = 0
+        renderer.pipeline.globalUniforms.resolution = [64, 64]
+        for (let i = 0; i < fixture.setupFrames; i++) renderer.pipeline.render(0)
+      }
+      await renderer.compile(`search hydra\n${fixture.dsl}.write(o0)`)
+      const time = fixture.time || 0
+      renderer.pipeline.graph.renderSurface = 'o0'
+      renderer.pipeline.globalUniforms.time = time
+      renderer.pipeline.globalUniforms.resolution = [64, 64]
+      renderer.pipeline.render(time)
+      return pixels(canvas)
+    }
+
+    async function renderNativeControl(renderer, canvas, compile) {
+      await renderer.loadEffects(['synth/perlin'])
+      await compile.call(renderer, 'search synth\nperlin().write(o0)')
+      renderer.pipeline.globalUniforms.time = 0
+      renderer.pipeline.globalUniforms.resolution = [64, 64]
+      renderer.pipeline.render(0)
+      return pixels(canvas)
+    }
+
+    try {
+      const legacyCanvas = document.getElementById('legacy')
+      const portedCanvas = document.getElementById('ported')
+      const nativeReferenceCanvas = document.getElementById('native-reference')
+      const nativeInterfaceCanvas = document.getElementById('native-interface')
+      const legacy = createLegacy(legacyCanvas)
+      const noisemakerEngine = await loadEngine()
+      const nativeCompile = noisemakerEngine.CanvasRenderer.prototype.compile
+      const ported = await createPorted(portedCanvas)
+      let ok = 0
+      let fail = 0
+
+      for (const fixture of FIXTURES) {
+        const expected = renderLegacy(legacy, legacyCanvas, fixture)
+        const actual = await renderPorted(ported, portedCanvas, fixture)
+        const result = compare(actual, expected)
+        if (result.differingBytes === 0) {
+          emit(`ok    ${fixture.name}`)
+          ok++
+        } else {
+          emit(`FAIL  ${fixture.name}  →  ${result.differingBytes}/${result.totalBytes} bytes differ; max delta ${result.maxDelta}; samples ${JSON.stringify(result.samples)}`)
+          fail++
+        }
+      }
+
+      await ported.loadEffects(['synth/perlin'])
+      for (const transition of [
+        {
+          name: 'native_to_hydra_src_surface',
+          surface: 'o1',
+          dsl: 'src(tex: o1).write(o0)'
+        },
+        {
+          name: 'native_to_hydra_prev_surface',
+          surface: 'o0',
+          dsl: 'prev().write(o0)'
+        }
+      ]) {
+        await ported.compile(`search synth\nperlin().write(${transition.surface})`)
+        ported.pipeline.graph.renderSurface = transition.surface
+        ported.pipeline.globalUniforms.time = 0
+        ported.pipeline.globalUniforms.resolution = [64, 64]
+        ported.pipeline.render(0)
+        const expected = pixels(portedCanvas)
+
+        await ported.compile(`search hydra\n${transition.dsl}`)
+        ported.pipeline.graph.renderSurface = 'o0'
+        ported.pipeline.globalUniforms.time = 0
+        ported.pipeline.globalUniforms.resolution = [64, 64]
+        ported.pipeline.render(0)
+        const actual = pixels(portedCanvas)
+        const result = compare(actual, expected)
+        if (result.differingBytes === 0) {
+          emit(`ok    ${transition.name}`)
+          ok++
+        } else {
+          emit(`FAIL  ${transition.name}  →  ${result.differingBytes}/${result.totalBytes} bytes differ; max delta ${result.maxDelta}; samples ${JSON.stringify(result.samples)}`)
+          fail++
+        }
+      }
+
+      await ported.compile('search hydra\ngradient(speed: 0).write(o1)')
+      ported.pipeline.graph.renderSurface = 'o1'
+      ported.pipeline.globalUniforms.time = 0
+      ported.pipeline.globalUniforms.resolution = [64, 64]
+      ported.pipeline.render(0)
+      const expectedHydraToNative = pixels(portedCanvas)
+
+      await ported.compile('search io\nread(o1).write(o0)')
+      ported.pipeline.graph.renderSurface = 'o0'
+      ported.pipeline.globalUniforms.time = 0
+      ported.pipeline.globalUniforms.resolution = [64, 64]
+      ported.pipeline.render(0)
+      const actualHydraToNative = pixels(portedCanvas)
+      const hydraToNativeResult = compare(actualHydraToNative, expectedHydraToNative)
+      if (hydraToNativeResult.differingBytes === 0) {
+        emit('ok    hydra_to_native_read_surface')
+        ok++
+      } else {
+        emit(`FAIL  hydra_to_native_read_surface  →  ${hydraToNativeResult.differingBytes}/${hydraToNativeResult.totalBytes} bytes differ; max delta ${hydraToNativeResult.maxDelta}; samples ${JSON.stringify(hydraToNativeResult.samples)}`)
+        fail++
+      }
+
+      await ported.loadEffects(['filter/invert'])
+      await ported.compile('search hydra\ngradient(speed: 0).write(o0)')
+      ported.pipeline.graph.renderSurface = 'o0'
+      ported.pipeline.globalUniforms.time = 0
+      ported.pipeline.globalUniforms.resolution = [64, 64]
+      ported.pipeline.render(0)
+      const expectedMixedPrev = pixels(portedCanvas)
+
+      await ported.compile('search hydra, filter\nprev().invert().invert().write(o0)')
+      ported.pipeline.graph.renderSurface = 'o0'
+      ported.pipeline.globalUniforms.time = 0
+      ported.pipeline.globalUniforms.resolution = [64, 64]
+      ported.pipeline.render(0)
+      const actualMixedPrev = pixels(portedCanvas)
+      const mixedPrevResult = compare(actualMixedPrev, expectedMixedPrev)
+      if (mixedPrevResult.differingBytes === 0) {
+        emit('ok    hydra_to_native_prev_feedback')
+        ok++
+      } else {
+        emit(`FAIL  hydra_to_native_prev_feedback  →  ${mixedPrevResult.differingBytes}/${mixedPrevResult.totalBytes} bytes differ; max delta ${mixedPrevResult.maxDelta}; samples ${JSON.stringify(mixedPrevResult.samples)}`)
+        fail++
+      }
+
+      const nativeReference = await createRenderer(nativeReferenceCanvas, noisemakerEngine)
+      const nativeInterface = await createRenderer(nativeInterfaceCanvas, noisemakerEngine)
+      const expectedNative = await renderNativeControl(
+        nativeReference,
+        nativeReferenceCanvas,
+        nativeCompile
+      )
+      const actualNative = await renderNativeControl(
+        nativeInterface,
+        nativeInterfaceCanvas,
+        nativeInterface.compile
+      )
+      const nativeResult = compare(actualNative, expectedNative)
+      if (nativeResult.differingBytes === 0) {
+        emit('ok    noisemaker_native_control')
+        ok++
+      } else {
+        emit(`FAIL  noisemaker_native_control  →  ${nativeResult.differingBytes}/${nativeResult.totalBytes} bytes differ; max delta ${nativeResult.maxDelta}; samples ${JSON.stringify(nativeResult.samples)}`)
+        fail++
+      }
+
+      emit(`=== ${ok} ok, ${fail} fail / ${ok + fail} total ===`)
+    } catch (error) {
+      emit(`THROW parity_fixture  →  ${errorText(error)}`)
+      emit(`=== 0 ok, 1 fail / ${FIXTURES.length + 1} total ===`)
+    }
+  </script>
+</body>
+</html>
