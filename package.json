@@ -1,7 +1,7 @@
 {
-  "name": "hydra-synth",
+  "name": "noisemaker-for-hydra-synth",
   "version": "2.0.0-dev.0",
-  "description": "Hydra live-coding effects for the Noisemaker shader engine",
+  "description": "Hydra effects ported natively to the Noisemaker shader engine",
   "type": "module",
   "main": "./src/index.js",
   "exports": {
@@ -19,10 +19,6 @@
     "build": "node scripts/build.mjs",
     "test": "node --test test/*.test.mjs && node scripts/test.mjs"
   },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/ojack/hydra-synth.git"
-  },
   "keywords": [
     "webgl",
     "webgl2",
@@ -34,10 +30,6 @@
   ],
   "author": "ojack",
   "license": "AGPL",
-  "bugs": {
-    "url": "https://github.com/ojack/hydra-synth/issues"
-  },
-  "homepage": "https://github.com/ojack/hydra-synth#readme",
   "dependencies": {},
   "devDependencies": {
     "esbuild": "^0.25.0",

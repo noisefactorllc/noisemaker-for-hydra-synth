@@ -75,7 +75,7 @@ let server, exitCode = 0
 try {
   writeFileSync(
     LEGACY_BUNDLE,
-    execFileSync('git', ['show', 'main:dist/hydra-synth.js'], { encoding: 'utf8' })
+    execFileSync('git', ['show', 'upstream/main:dist/hydra-synth.js'], { encoding: 'utf8' })
   )
   console.log(`[test] starting http-server on port ${PORT}`)
   server = startServer()
