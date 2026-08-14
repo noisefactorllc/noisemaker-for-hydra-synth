@@ -1749,6 +1749,7 @@ function installHydraCompiler(engine) {
         options.shaderOverrides
       )
     });
+    if (!pipeline || this.pipeline !== pipeline) return pipeline;
     applyUniformBindings(pipeline, hydra.uniformBindings);
     reconcileSurfaceFormats(
       this,

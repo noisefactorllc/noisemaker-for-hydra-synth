@@ -246,6 +246,43 @@ test('binds animated parameters into a fused shader without sampling passes', ()
   })
 })
 
+test('does not reconcile a newer pipeline after a stale compile returns null', async () => {
+  const replacement = {
+    graph: { textures: new Map() },
+    backend: { textures: new Map() },
+    surfaces: new Map()
+  }
+
+  class CanvasRenderer {
+    constructor() {
+      this.pipeline = null
+    }
+
+    async compile() {
+      this.pipeline = replacement
+      return null
+    }
+  }
+
+  const engine = {
+    CanvasRenderer,
+    compile() {
+      return compiledPlan([{
+        op: 'hydra.gradient',
+        args: { speed: 0 },
+        from: null,
+        temp: 0
+      }])
+    }
+  }
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+
+  assert.equal(await renderer.compile('stale Hydra source'), null)
+  assert.equal(renderer.pipeline, replacement)
+  assert.deepEqual([...replacement.graph.textures], [])
+})
+
 test('installs Hydra overrides and restores native Noisemaker surface precision', async () => {
   const oscillator = {
     type: 'Oscillator',
