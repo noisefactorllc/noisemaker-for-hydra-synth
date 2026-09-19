@@ -443,3 +443,4 @@ test('installs Hydra overrides and restores native Noisemaker surface precision'
   assert.equal(renderer.pipeline.backend.textures.get('global_o0_read').format, 'rgba32f')
   assert.equal(renderer.pipeline.backend.textures.get('global_o0_read').value, 'native frame')
 })
+
