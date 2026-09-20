@@ -444,3 +444,165 @@ test('installs Hydra overrides and restores native Noisemaker surface precision'
   assert.equal(renderer.pipeline.backend.textures.get('global_o0_read').value, 'native frame')
 })
 
+test('createSurfaces retains promoted surface format during recompilation', async () => {
+  const hydraSource = compiledPlan([{
+    op: 'hydra.gradient',
+    args: { speed: 0 },
+    from: null,
+    temp: 0
+  }], 'o1')
+
+  const readSource = compiledPlan([{
+    op: 'hydra.src',
+    args: { tex: { kind: 'output', name: 'o1' } },
+    from: null,
+    temp: 0
+  }], 'o0')
+
+  let compiled = hydraSource
+  const textures = new Map()
+
+  class CanvasRenderer {
+    constructor() {
+      this.pipeline = {
+        graph: { textures: new Map(), passes: [] },
+        backend: {
+          textures,
+          createTexture(name, spec) {
+            textures.set(name, {
+              format: spec.format,
+              width: spec.width,
+              height: spec.height,
+              value: null
+            })
+          },
+          copyTexture(source, target) {
+            textures.get(target).value = textures.get(source).value
+          },
+          destroyTexture(name) { textures.delete(name) }
+        },
+        surfaces: new Map(),
+        createSurfaces() {
+          for (const name of ['o0', 'o1']) {
+            const underscoreId = `global_${name}`
+            const spec = this.graph?.textures?.get?.(underscoreId)
+            const format = spec?.format || 'rgba16f'
+            const readKey = `${underscoreId}_read`
+            const writeKey = `${underscoreId}_write`
+            const existing = textures.get(readKey)
+            if (existing && existing.format === format) continue
+            textures.set(readKey, { format, width: 1, height: 1, value: null })
+            textures.set(writeKey, { format, width: 1, height: 1, value: null })
+            this.surfaces.set(name, { read: readKey, write: writeKey })
+          }
+        }
+      }
+    }
+
+    async compile(source, options) {
+      this.pipeline.graph.textures = new Map()
+      this.pipeline.createSurfaces()
+      return this.pipeline
+    }
+  }
+
+  const engine = {
+    CanvasRenderer,
+    compile() { return compiled }
+  }
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+
+  await renderer.compile('hydra to o1')
+  assert.equal(textures.get('global_o1_read').format, 'rgba32f')
+  textures.get('global_o1_read').value = 'pixel-data'
+
+  compiled = readSource
+  await renderer.compile('read o1 into o0')
+  assert.equal(textures.get('global_o1_read').format, 'rgba32f')
+  assert.equal(textures.get('global_o1_read').value, 'pixel-data')
+})
+
+test('pre-compilation backup preserves surface data across format migration', async () => {
+  const hydraPrevSource = compiledPlan([{
+    op: 'hydra.prev',
+    args: {},
+    from: null,
+    temp: 0
+  }], 'o0')
+
+  const nativeSource = compiledPlan([{
+    op: 'synth.perlin',
+    args: {},
+    from: null,
+    temp: 0
+  }], 'o0')
+
+  let compiled = nativeSource
+  const textures = new Map()
+  const copyOperations = []
+
+  class CanvasRenderer {
+    constructor() {
+      this.pipeline = {
+        graph: { textures: new Map(), passes: [] },
+        backend: {
+          textures,
+          createTexture(name, spec) {
+            textures.set(name, {
+              format: spec.format,
+              width: spec.width,
+              height: spec.height,
+              value: null
+            })
+          },
+          copyTexture(source, target) {
+            copyOperations.push([source, target])
+            const src = textures.get(source)
+            const dst = textures.get(target)
+            if (src && dst) dst.value = src.value
+          },
+          destroyTexture(name) { textures.delete(name) }
+        },
+        surfaces: new Map(),
+        createSurfaces() {
+          const underscoreId = 'global_o0'
+          const spec = this.graph?.textures?.get?.(underscoreId)
+          const format = spec?.format || 'rgba16f'
+          const readKey = `${underscoreId}_read`
+          const writeKey = `${underscoreId}_write`
+          const existing = textures.get(readKey)
+          if (existing && existing.format === format) return
+          textures.set(readKey, { format, width: 1, height: 1, value: null })
+          textures.set(writeKey, { format, width: 1, height: 1, value: null })
+          this.surfaces.set('o0', { read: readKey, write: writeKey })
+        }
+      }
+    }
+
+    async compile(source, options) {
+      this.pipeline.graph.textures = new Map()
+      this.pipeline.createSurfaces()
+      return this.pipeline
+    }
+  }
+
+  const engine = {
+    CanvasRenderer,
+    compile() { return compiled }
+  }
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+
+  await renderer.compile('native start')
+  assert.equal(textures.get('global_o0_read').format, 'rgba16f')
+  textures.get('global_o0_read').value = 'pre-migration-data'
+
+  // Compile hydra.prev which promotes o0 to rgba32f and preserves existing o0
+  compiled = hydraPrevSource
+  await renderer.compile('hydra prev')
+  assert.equal(textures.get('global_o0_read').format, 'rgba32f')
+  assert.equal(textures.get('global_o0_read').value, 'pre-migration-data')
+  assert.ok(copyOperations.length >= 2, 'Expected backup and restore copyTexture operations')
+})
+
