@@ -246,6 +246,72 @@ test('binds animated parameters into a fused shader without sampling passes', ()
   })
 })
 
+test('binds dynamic Audio parameters into a fused shader without sampling passes', () => {
+  const audio = {
+    type: 'Audio',
+    channel: 1,
+    scale: 2.0
+  }
+  const compiled = compiledPlan([
+    {
+      op: 'hydra.gradient',
+      args: { speed: 0 },
+      from: null,
+      temp: 0
+    },
+    {
+      op: 'hydra.rotate',
+      args: { angle: audio, speed: 0 },
+      from: 0,
+      temp: 1
+    }
+  ])
+
+  const result = buildHydraShaderOverrides(compiled)
+  const shader = result.shaderOverrides[1].rotate.glsl
+
+  assert.match(shader, /uniform float _hydra_1_angle;/)
+  assert.match(shader, /_hydra_rotate\(_st, _hydra_1_angle, 0\.0\)/)
+  assert.deepEqual(result.uniformBindings[1]._hydra_1_angle, {
+    value: audio,
+    min: 0,
+    max: 100
+  })
+})
+
+test('binds dynamic Midi parameters into a fused shader without sampling passes', () => {
+  const midi = {
+    type: 'Midi',
+    channel: 1,
+    cc: 14
+  }
+  const compiled = compiledPlan([
+    {
+      op: 'hydra.gradient',
+      args: { speed: 0 },
+      from: null,
+      temp: 0
+    },
+    {
+      op: 'hydra.rotate',
+      args: { angle: midi, speed: 0 },
+      from: 0,
+      temp: 1
+    }
+  ])
+
+  const result = buildHydraShaderOverrides(compiled)
+  const shader = result.shaderOverrides[1].rotate.glsl
+
+  assert.match(shader, /uniform float _hydra_1_angle;/)
+  assert.match(shader, /_hydra_rotate\(_st, _hydra_1_angle, 0\.0\)/)
+  assert.deepEqual(result.uniformBindings[1]._hydra_1_angle, {
+    value: midi,
+    min: 0,
+    max: 100
+  })
+})
+
 test('does not reconcile a newer pipeline after a stale compile returns null', async () => {
   const replacement = {
     graph: { textures: new Map() },
