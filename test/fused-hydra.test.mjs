@@ -45,6 +45,30 @@ test('fuses coordinate effects into their upstream Hydra source', () => {
   assert.match(shader, /fragColor = _hydra_node_1\(_st\);/)
 })
 
+test('fuses effects targeting upper output surface boundary o7', () => {
+  const compiled = compiledPlan([
+    {
+      op: 'hydra.gradient',
+      args: { speed: 0 },
+      from: null,
+      temp: 0
+    },
+    {
+      op: 'hydra.rotate',
+      args: { angle: 0.3, speed: 0 },
+      from: 0,
+      temp: 1
+    }
+  ], 'o7')
+
+  const result = buildHydraShaderOverrides(compiled)
+  const shader = result.shaderOverrides[1].rotate.glsl
+
+  assert.deepEqual(result.outputSurfaces, ['o7'])
+  assert.match(shader, /return _hydra_node_0\(_hydra_rotate\(_st, 0\.3, 0\.0\)\);/)
+  assert.match(shader, /fragColor = _hydra_node_1\(_st\);/)
+})
+
 test('fuses nested Hydra inputs for combine-coordinate effects', () => {
   const compiled = compiledPlan([
     {
