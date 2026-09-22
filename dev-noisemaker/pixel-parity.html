@@ -142,13 +142,22 @@
     }
 
     function errorText(error) {
-      if (error && typeof error.message === 'string') return error.message
-      if (Array.isArray(error?.diagnostics)) {
-        return error.diagnostics.map(item => item.message || JSON.stringify(item)).join('; ')
+      if (Array.isArray(error?.diagnostics) && error.diagnostics.length > 0) {
+        return error.diagnostics.map(item => {
+          const msg = item.message || JSON.stringify(item)
+          const loc = item.location || item.loc
+          if (loc) {
+            const line = loc.line != null ? loc.line : loc.row
+            const col = loc.column != null ? loc.column : loc.col
+            if (line != null) return `${msg} (line ${line}${col != null ? `, col ${col}` : ''})`
+          }
+          return msg
+        }).join('; ')
       }
-      if (Array.isArray(error?.errors)) {
+      if (Array.isArray(error?.errors) && error.errors.length > 0) {
         return error.errors.map(item => item.message || JSON.stringify(item)).join('; ')
       }
+      if (error && typeof error.message === 'string') return error.message
       try { return JSON.stringify(error) } catch (_) { return String(error) }
     }
 

@@ -771,3 +771,46 @@ test('pre-compilation backup preserves surface data across format migration', as
   assert.ok(copyOperations.length >= 2, 'Expected backup and restore copyTexture operations')
 })
 
+test('compileWithHydraParity propagates compiler errors and diagnostics with source locations unchanged', async () => {
+  class CanvasRenderer {
+    async compile() {
+      return {}
+    }
+  }
+
+  const err = new Error('Compilation failed with 1 error(s)')
+  err.diagnostics = [
+    {
+      code: 'S001',
+      message: 'read() is a starter node and cannot be chained inline.',
+      location: { line: 3, column: 17 }
+    }
+  ]
+
+  const engine = {
+    CanvasRenderer,
+    compile() {
+      throw err
+    }
+  }
+
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+
+  await assert.rejects(
+    async () => renderer.compile('search synth\n\n    diagProbe().read(o0).write(o1)'),
+    (error) => {
+      assert.equal(error.message, 'Compilation failed with 1 error(s)')
+      assert.deepEqual(error.diagnostics, [
+        {
+          code: 'S001',
+          message: 'read() is a starter node and cannot be chained inline.',
+          location: { line: 3, column: 17 }
+        }
+      ])
+      return true
+    }
+  )
+})
+
+
