@@ -69,6 +69,81 @@ test('fuses effects targeting upper output surface boundary o7', () => {
   assert.match(shader, /fragColor = _hydra_node_1\(_st\);/)
 })
 
+test('ignores builtin pipeline steps when building shader overrides', () => {
+  const compiled = {
+    plans: [{
+      chain: [
+        {
+          op: 'hydra.gradient',
+          args: { speed: 0 },
+          from: null,
+          temp: 0
+        },
+        {
+          op: 'hydra.rotate',
+          args: { angle: 0.3, speed: 0 },
+          from: 0,
+          temp: 1
+        },
+        {
+          op: 'runtime.pass',
+          args: {},
+          from: 1,
+          temp: 2,
+          builtin: true
+        },
+        {
+          op: '_write',
+          args: { tex: { kind: 'output', name: 'o0' } },
+          from: 1,
+          temp: 3,
+          builtin: true
+        }
+      ],
+      write: { kind: 'output', name: 'o0' }
+    }]
+  }
+
+  const result = buildHydraShaderOverrides(compiled)
+  const shader = result.shaderOverrides[1]?.rotate?.glsl
+
+  assert.deepEqual(result.outputSurfaces, ['o0'])
+  assert.ok(shader, 'Expected shader override for temp 1')
+  assert.equal(result.shaderOverrides[2], undefined, 'Builtin step should not generate shader override')
+
+  const builtinTerminalCompiled = {
+    plans: [{
+      chain: [
+        {
+          op: 'hydra.gradient',
+          args: { speed: 0 },
+          from: null,
+          temp: 0
+        },
+        {
+          op: 'hydra.rotate',
+          args: { angle: 0.3, speed: 0 },
+          from: 0,
+          temp: 1,
+          builtin: true
+        },
+        {
+          op: '_write',
+          args: { tex: { kind: 'output', name: 'o0' } },
+          from: 1,
+          temp: 2,
+          builtin: true
+        }
+      ],
+      write: { kind: 'output', name: 'o0' }
+    }]
+  }
+
+  const builtinResult = buildHydraShaderOverrides(builtinTerminalCompiled)
+  assert.deepEqual(builtinResult.outputSurfaces, [])
+  assert.equal(builtinResult.shaderOverrides[1], undefined)
+})
+
 test('fuses nested Hydra inputs for combine-coordinate effects', () => {
   const compiled = compiledPlan([
     {
