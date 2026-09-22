@@ -141,18 +141,23 @@
       }
     }
 
+    function formatDiagnostic(item) {
+      const msg = item?.message || JSON.stringify(item)
+      const loc = item?.location || item?.loc
+      if (loc) {
+        const line = loc.line != null ? loc.line : loc.row
+        const col = loc.column != null ? loc.column : loc.col
+        if (line != null && !/\bline\s+\d+/i.test(msg)) return `${msg} (line ${line}${col != null ? `, col ${col}` : ''})`
+      }
+      return msg
+    }
+
     function errorText(error) {
       if (Array.isArray(error?.diagnostics) && error.diagnostics.length > 0) {
-        return error.diagnostics.map(item => {
-          const msg = item.message || JSON.stringify(item)
-          const loc = item.location || item.loc
-          if (loc) {
-            const line = loc.line != null ? loc.line : loc.row
-            const col = loc.column != null ? loc.column : loc.col
-            if (line != null) return `${msg} (line ${line}${col != null ? `, col ${col}` : ''})`
-          }
-          return msg
-        }).join('; ')
+        return error.diagnostics.map(formatDiagnostic).join('; ')
+      }
+      if (error?.diagnostic != null) {
+        return formatDiagnostic(error.diagnostic)
       }
       if (Array.isArray(error?.errors) && error.errors.length > 0) {
         return error.errors.map(item => item.message || JSON.stringify(item)).join('; ')

@@ -813,4 +813,53 @@ test('compileWithHydraParity propagates compiler errors and diagnostics with sou
   )
 })
 
+test('compileWithHydraParity propagates structured lexer diagnostics attached to SyntaxError', async () => {
+  class CanvasRenderer {
+    async compile() {
+      return {}
+    }
+  }
+
+  const err = new SyntaxError("Unexpected character '@' at line 1 col 1")
+  Object.defineProperty(err, 'diagnostic', {
+    value: {
+      code: 'L001',
+      stage: 'lexer',
+      severity: 'error',
+      message: "Unexpected character '@' at line 1 col 1",
+      location: { line: 1, column: 1 },
+      span: { start: 0, end: 1 }
+    },
+    writable: true,
+    configurable: true
+  })
+
+  const engine = {
+    CanvasRenderer,
+    compile() {
+      throw err
+    }
+  }
+
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+
+  await assert.rejects(
+    async () => renderer.compile('@noise()'),
+    (error) => {
+      assert.equal(error, err)
+      assert.equal(error.message, "Unexpected character '@' at line 1 col 1")
+      assert.deepEqual(error.diagnostic, {
+        code: 'L001',
+        stage: 'lexer',
+        severity: 'error',
+        message: "Unexpected character '@' at line 1 col 1",
+        location: { line: 1, column: 1 },
+        span: { start: 0, end: 1 }
+      })
+      return true
+    }
+  )
+})
+
 
