@@ -975,3 +975,168 @@ test('compileWithHydraParity propagates structured parser expectation diagnostic
     }
   )
 })
+
+test('compileWithHydraParity propagates structured parser automation diagnostics attached to SyntaxError', async () => {
+  class CanvasRenderer {
+    async compile() {
+      return {}
+    }
+  }
+
+  const errP003 = new SyntaxError("midi() requires 'channel' or 'zone' argument at line 2 col 24")
+  Object.defineProperty(errP003, 'diagnostic', {
+    value: {
+      code: 'P003',
+      stage: 'parser',
+      severity: 'error',
+      message: "midi() requires 'channel' or 'zone' argument at line 2 col 24",
+      location: { line: 2, column: 24 },
+      span: null
+    },
+    writable: true,
+    configurable: true
+  })
+
+  let thrownErr = errP003
+  const engine = {
+    CanvasRenderer,
+    compile() {
+      throw thrownErr
+    }
+  }
+
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+
+  await assert.rejects(
+    async () => renderer.compile('search synth\nlet x = midi()'),
+    (error) => {
+      assert.equal(error, errP003)
+      assert.equal(error.message, "midi() requires 'channel' or 'zone' argument at line 2 col 24")
+      assert.deepEqual(error.diagnostic, {
+        code: 'P003',
+        stage: 'parser',
+        severity: 'error',
+        message: "midi() requires 'channel' or 'zone' argument at line 2 col 24",
+        location: { line: 2, column: 24 },
+        span: null
+      })
+      return true
+    }
+  )
+
+  const errUnlocatedP003 = new SyntaxError("midi() requires 'channel' or 'zone' argument at line undefined col undefined")
+  Object.defineProperty(errUnlocatedP003, 'diagnostic', {
+    value: {
+      code: 'P003',
+      stage: 'parser',
+      severity: 'error',
+      message: "midi() requires 'channel' or 'zone' argument at line undefined col undefined",
+      location: null,
+      span: null
+    },
+    writable: true,
+    configurable: true
+  })
+
+  thrownErr = errUnlocatedP003
+  await assert.rejects(
+    async () => renderer.compile('search synth\nlet x = midi()'),
+    (error) => {
+      assert.equal(error, errUnlocatedP003)
+      assert.equal(error.message, "midi() requires 'channel' or 'zone' argument at line undefined col undefined")
+      assert.deepEqual(error.diagnostic, {
+        code: 'P003',
+        stage: 'parser',
+        severity: 'error',
+        message: "midi() requires 'channel' or 'zone' argument at line undefined col undefined",
+        location: null,
+        span: null
+      })
+      return true
+    }
+  )
+})
+
+test('compileWithHydraParity propagates structured parser search directive diagnostics attached to SyntaxError', async () => {
+  class CanvasRenderer {
+    async compile() {
+      return {}
+    }
+  }
+
+  const errP004 = new SyntaxError("Expected namespace identifier after search at line 1 col 7")
+  Object.defineProperty(errP004, 'diagnostic', {
+    value: {
+      code: 'P004',
+      stage: 'parser',
+      severity: 'error',
+      message: "Expected namespace identifier after search at line 1 col 7",
+      location: { line: 1, column: 7 },
+      span: null
+    },
+    writable: true,
+    configurable: true
+  })
+
+  let thrownErr = errP004
+  const engine = {
+    CanvasRenderer,
+    compile() {
+      throw thrownErr
+    }
+  }
+
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+
+  await assert.rejects(
+    async () => renderer.compile('search'),
+    (error) => {
+      assert.equal(error, errP004)
+      assert.equal(error.message, "Expected namespace identifier after search at line 1 col 7")
+      assert.deepEqual(error.diagnostic, {
+        code: 'P004',
+        stage: 'parser',
+        severity: 'error',
+        message: "Expected namespace identifier after search at line 1 col 7",
+        location: { line: 1, column: 7 },
+        span: null
+      })
+      return true
+    }
+  )
+
+  const errUnlocatedP004 = new SyntaxError("Missing required 'search' directive. Every program must start with 'search <namespace>, ...' to specify namespace search order.")
+  Object.defineProperty(errUnlocatedP004, 'diagnostic', {
+    value: {
+      code: 'P004',
+      stage: 'parser',
+      severity: 'error',
+      message: "Missing required 'search' directive. Every program must start with 'search <namespace>, ...' to specify namespace search order.",
+      location: null,
+      span: null
+    },
+    writable: true,
+    configurable: true
+  })
+
+  thrownErr = errUnlocatedP004
+  await assert.rejects(
+    async () => renderer.compile(''),
+    (error) => {
+      assert.equal(error, errUnlocatedP004)
+      assert.equal(error.message, "Missing required 'search' directive. Every program must start with 'search <namespace>, ...' to specify namespace search order.")
+      assert.deepEqual(error.diagnostic, {
+        code: 'P004',
+        stage: 'parser',
+        severity: 'error',
+        message: "Missing required 'search' directive. Every program must start with 'search <namespace>, ...' to specify namespace search order.",
+        location: null,
+        span: null
+      })
+      return true
+    }
+  )
+})
+
