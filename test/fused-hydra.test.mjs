@@ -862,4 +862,116 @@ test('compileWithHydraParity propagates structured lexer diagnostics attached to
   )
 })
 
+test('compileWithHydraParity propagates structured parser expectation diagnostics attached to SyntaxError', async () => {
+  class CanvasRenderer {
+    async compile() {
+      return {}
+    }
+  }
 
+  const errP001 = new SyntaxError("Expect '(' at line 2 col 8")
+  Object.defineProperty(errP001, 'diagnostic', {
+    value: {
+      code: 'P001',
+      stage: 'parser',
+      severity: 'error',
+      message: "Expect '(' at line 2 col 8",
+      location: { line: 2, column: 8 },
+      span: null
+    },
+    writable: true,
+    configurable: true
+  })
+
+  let thrownErr = errP001
+  const engine = {
+    CanvasRenderer,
+    compile() {
+      throw thrownErr
+    }
+  }
+
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+
+  await assert.rejects(
+    async () => renderer.compile('search synth\nrender o0'),
+    (error) => {
+      assert.equal(error, errP001)
+      assert.equal(error.message, "Expect '(' at line 2 col 8")
+      assert.deepEqual(error.diagnostic, {
+        code: 'P001',
+        stage: 'parser',
+        severity: 'error',
+        message: "Expect '(' at line 2 col 8",
+        location: { line: 2, column: 8 },
+        span: null
+      })
+      return true
+    }
+  )
+
+  const errP002 = new SyntaxError("Expect ')' at line 2 col 10")
+  Object.defineProperty(errP002, 'diagnostic', {
+    value: {
+      code: 'P002',
+      stage: 'parser',
+      severity: 'error',
+      message: "Expect ')' at line 2 col 10",
+      location: { line: 2, column: 10 },
+      span: null
+    },
+    writable: true,
+    configurable: true
+  })
+
+  thrownErr = errP002
+  await assert.rejects(
+    async () => renderer.compile('search synth\nrender(o0'),
+    (error) => {
+      assert.equal(error, errP002)
+      assert.equal(error.message, "Expect ')' at line 2 col 10")
+      assert.deepEqual(error.diagnostic, {
+        code: 'P002',
+        stage: 'parser',
+        severity: 'error',
+        message: "Expect ')' at line 2 col 10",
+        location: { line: 2, column: 10 },
+        span: null
+      })
+      return true
+    }
+  )
+
+  const errUnlocated = new SyntaxError("Expect '(' at line undefined col undefined")
+  Object.defineProperty(errUnlocated, 'diagnostic', {
+    value: {
+      code: 'P001',
+      stage: 'parser',
+      severity: 'error',
+      message: "Expect '(' at line undefined col undefined",
+      location: null,
+      span: null
+    },
+    writable: true,
+    configurable: true
+  })
+
+  thrownErr = errUnlocated
+  await assert.rejects(
+    async () => renderer.compile('search synth\nrender o0'),
+    (error) => {
+      assert.equal(error, errUnlocated)
+      assert.equal(error.message, "Expect '(' at line undefined col undefined")
+      assert.deepEqual(error.diagnostic, {
+        code: 'P001',
+        stage: 'parser',
+        severity: 'error',
+        message: "Expect '(' at line undefined col undefined",
+        location: null,
+        span: null
+      })
+      return true
+    }
+  )
+})
