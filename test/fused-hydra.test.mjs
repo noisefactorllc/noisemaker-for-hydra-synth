@@ -1208,3 +1208,86 @@ test('compileWithHydraParity preserves pipeline sink deferral contract across re
   assert.equal(recompiledPipeline.shouldDeferRender(), false)
 })
 
+test('compileWithHydraParity propagates structured parser output validation diagnostics attached to SyntaxError', async () => {
+  class CanvasRenderer {
+    async compile() {
+      return {}
+    }
+  }
+
+  const errP005 = new SyntaxError("write() requires an explicit surface reference (e.g., o0, o1, xyz0, vel0, rgba0, mesh0, none) at line 2 col 21")
+  Object.defineProperty(errP005, 'diagnostic', {
+    value: {
+      code: 'P005',
+      stage: 'parser',
+      severity: 'error',
+      message: "write() requires an explicit surface reference (e.g., o0, o1, xyz0, vel0, rgba0, mesh0, none) at line 2 col 21",
+      location: { line: 2, column: 21 },
+      span: null
+    },
+    writable: true,
+    configurable: true
+  })
+
+  let thrownErr = errP005
+  const engine = {
+    CanvasRenderer,
+    compile() {
+      throw thrownErr
+    }
+  }
+
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+
+  await assert.rejects(
+    async () => renderer.compile('search synth\nnoise().write()'),
+    (error) => {
+      assert.equal(error, errP005)
+      assert.equal(error.message, "write() requires an explicit surface reference (e.g., o0, o1, xyz0, vel0, rgba0, mesh0, none) at line 2 col 21")
+      assert.deepEqual(error.diagnostic, {
+        code: 'P005',
+        stage: 'parser',
+        severity: 'error',
+        message: "write() requires an explicit surface reference (e.g., o0, o1, xyz0, vel0, rgba0, mesh0, none) at line 2 col 21",
+        location: { line: 2, column: 21 },
+        span: null
+      })
+      return true
+    }
+  )
+
+  const errUnlocatedP005 = new SyntaxError("Expected output reference in render()")
+  Object.defineProperty(errUnlocatedP005, 'diagnostic', {
+    value: {
+      code: 'P005',
+      stage: 'parser',
+      severity: 'error',
+      message: "Expected output reference in render()",
+      location: null,
+      span: null
+    },
+    writable: true,
+    configurable: true
+  })
+
+  thrownErr = errUnlocatedP005
+  await assert.rejects(
+    async () => renderer.compile('search synth\nrender(none)'),
+    (error) => {
+      assert.equal(error, errUnlocatedP005)
+      assert.equal(error.message, "Expected output reference in render()")
+      assert.deepEqual(error.diagnostic, {
+        code: 'P005',
+        stage: 'parser',
+        severity: 'error',
+        message: "Expected output reference in render()",
+        location: null,
+        span: null
+      })
+      return true
+    }
+  )
+})
+
+
