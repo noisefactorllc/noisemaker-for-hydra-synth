@@ -1140,3 +1140,71 @@ test('compileWithHydraParity propagates structured parser search directive diagn
   )
 })
 
+test('compileWithHydraParity preserves pipeline sink deferral contract across recompilation', async () => {
+  let deferState = false
+  const textures = new Map()
+
+  class MockPipeline {
+    constructor() {
+      this.graph = { textures: new Map(), passes: [] }
+      this.backend = {
+        textures,
+        createTexture(name, spec) { textures.set(name, spec) },
+        destroyTexture(name) { textures.delete(name) }
+      }
+      this.surfaces = new Map()
+      this.sinkManager = {
+        shouldDeferRender() { return deferState }
+      }
+    }
+    createSurfaces() {}
+    shouldDeferRender() {
+      return this.sinkManager.shouldDeferRender()
+    }
+  }
+
+  class CanvasRenderer {
+    constructor() {
+      this.pipeline = new MockPipeline()
+      this._deferredFrameCount = 0
+    }
+    async compile() {
+      return this.pipeline
+    }
+    get deferredFrameCount() {
+      return this._deferredFrameCount
+    }
+  }
+
+  const engine = {
+    CanvasRenderer,
+    compile() {
+      return compiledPlan([{
+        op: 'hydra.gradient',
+        args: { speed: 0 },
+        from: null,
+        temp: 0
+      }], 'o0')
+    }
+  }
+
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+  const pipeline = await renderer.compile('search hydra\ngradient(speed: 0).write(o0)')
+
+  assert.equal(pipeline, renderer.pipeline)
+  assert.equal(typeof pipeline.shouldDeferRender, 'function')
+  assert.equal(pipeline.shouldDeferRender(), false)
+  assert.equal(renderer.deferredFrameCount, 0)
+
+  deferState = true
+  assert.equal(pipeline.shouldDeferRender(), true)
+
+  const recompiledPipeline = await renderer.compile('search hydra\nosc(frequency: 60).write(o0)')
+  assert.equal(recompiledPipeline, renderer.pipeline)
+  assert.equal(recompiledPipeline.shouldDeferRender(), true)
+
+  deferState = false
+  assert.equal(recompiledPipeline.shouldDeferRender(), false)
+})
+
