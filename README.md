@@ -5,6 +5,10 @@
 
 # Noisemaker for Hydra Synth
 
+Current measured support: [compatibility report](docs/COMPATIBILITY.md).
+
+Current qualification limits: [completion gaps](docs/COMPLETION_GAPS.md).
+
 Noisemaker for Hydra Synth is an experimental demo port of Hydra's GLSL effects to the [Noisemaker](https://noisemaker.app/) rendering engine. These effects can be mixed with Noisemaker effects in the same program chains.
 
 This is intended only as a tech demo that shows how to integrate the Noisemaker renderer into other projects.
