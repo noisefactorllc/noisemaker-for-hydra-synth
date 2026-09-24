@@ -1290,4 +1290,84 @@ test('compileWithHydraParity propagates structured parser output validation diag
   )
 })
 
+test('compileWithHydraParity propagates structured parser subchain validation diagnostics attached to SyntaxError', async () => {
+  class CanvasRenderer {
+    async compile() {
+      return {}
+    }
+  }
 
+  const errP006 = new SyntaxError("Expected '.' before chain element in subchain body at line 2 col 28")
+  Object.defineProperty(errP006, 'diagnostic', {
+    value: {
+      code: 'P006',
+      stage: 'parser',
+      severity: 'error',
+      message: "Expected '.' before chain element in subchain body at line 2 col 28",
+      location: { line: 2, column: 28 },
+      span: null
+    },
+    writable: true,
+    configurable: true
+  })
+
+  let thrownErr = errP006
+  const engine = {
+    CanvasRenderer,
+    compile() {
+      throw thrownErr
+    }
+  }
+
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+
+  await assert.rejects(
+    async () => renderer.compile('search synth\nnoise().subchain() { invert() }'),
+    (error) => {
+      assert.equal(error, errP006)
+      assert.equal(error.message, "Expected '.' before chain element in subchain body at line 2 col 28")
+      assert.deepEqual(error.diagnostic, {
+        code: 'P006',
+        stage: 'parser',
+        severity: 'error',
+        message: "Expected '.' before chain element in subchain body at line 2 col 28",
+        location: { line: 2, column: 28 },
+        span: null
+      })
+      return true
+    }
+  )
+
+  const errUnlocatedP006 = new SyntaxError("Subchain body cannot be empty at line undefined col undefined")
+  Object.defineProperty(errUnlocatedP006, 'diagnostic', {
+    value: {
+      code: 'P006',
+      stage: 'parser',
+      severity: 'error',
+      message: "Subchain body cannot be empty at line undefined col undefined",
+      location: null,
+      span: null
+    },
+    writable: true,
+    configurable: true
+  })
+
+  thrownErr = errUnlocatedP006
+  await assert.rejects(
+    async () => renderer.compile('search synth\nnoise().subchain() {}'),
+    (error) => {
+      assert.equal(error, errUnlocatedP006)
+      assert.equal(error.message, "Subchain body cannot be empty at line undefined col undefined")
+      assert.deepEqual(error.diagnostic, {
+        code: 'P006',
+        stage: 'parser',
+        severity: 'error',
+        message: "Subchain body cannot be empty at line undefined col undefined",
+        location: null,
+        span: null
+      })
+      return true
+    }
+  )
+})
