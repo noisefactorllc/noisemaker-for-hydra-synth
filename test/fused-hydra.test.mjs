@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import test from 'node:test'
 
 import {
+  EFFECTS,
   buildHydraShaderOverrides,
   installHydraCompiler
 } from '../src/engine/fuseHydraPlan.js'
@@ -1371,3 +1372,129 @@ test('compileWithHydraParity propagates structured parser subchain validation di
     }
   )
 })
+
+test('formats boolean and numeric edge cases into valid GLSL in fused shaders', () => {
+  const check = (speed) => {
+    const compiled = compiledPlan([{
+      op: 'hydra.gradient',
+      args: { speed },
+      from: null,
+      temp: 0
+    }])
+    return buildHydraShaderOverrides(compiled).shaderOverrides[0].gradient.glsl
+  }
+
+  assert.match(check(false), /return _hydra_gradient\(_st, 0\.0\);/)
+  assert.match(check(true), /return _hydra_gradient\(_st, 1\.0\);/)
+  assert.match(check(1e21), /return _hydra_gradient\(_st, 1e\+21\);/)
+  assert.doesNotMatch(check(1e21), /1e\+21\.0/)
+  assert.match(check(-0), /return _hydra_gradient\(_st, -0\.0\);/)
+})
+
+test('reconcileSurfaceFormats cleans up preBackups when pipeline resources are unavailable', async () => {
+  const hydraPrevSource = compiledPlan([{
+    op: 'hydra.prev',
+    args: {},
+    from: null,
+    temp: 0
+  }], 'o0')
+
+  const nativeSource = compiledPlan([{
+    op: 'synth.perlin',
+    args: {},
+    from: null,
+    temp: 0
+  }], 'o0')
+
+  let compiled = nativeSource
+  const textures = new Map()
+  const destroyed = []
+
+  class CanvasRenderer {
+    constructor() {
+      this.pipeline = {
+        graph: { textures: new Map(), passes: [] },
+        backend: {
+          textures,
+          createTexture(name, spec) {
+            textures.set(name, {
+              format: spec.format,
+              width: spec.width,
+              height: spec.height,
+              value: null
+            })
+          },
+          copyTexture() {},
+          destroyTexture(name) {
+            textures.delete(name)
+            destroyed.push(name)
+          }
+        },
+        surfaces: new Map(),
+        createSurfaces() {
+          const underscoreId = 'global_o0'
+          const format = 'rgba16f'
+          const readKey = `${underscoreId}_read`
+          const writeKey = `${underscoreId}_write`
+          textures.set(readKey, { format, width: 1, height: 1, value: null })
+          textures.set(writeKey, { format, width: 1, height: 1, value: null })
+          this.surfaces.set('o0', { read: readKey, write: writeKey })
+        }
+      }
+    }
+
+    async compile(source, options) {
+      // Simulate pipeline returning without graph.textures
+      this.pipeline.graph = null
+      return this.pipeline
+    }
+  }
+
+  const engine = {
+    CanvasRenderer,
+    compile() { return compiled }
+  }
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+
+  renderer.pipeline.createSurfaces()
+  assert.equal(textures.get('global_o0_read').format, 'rgba16f')
+
+  compiled = hydraPrevSource
+  await renderer.compile('hydra prev')
+  assert.ok(destroyed.some(name => name.startsWith('_hydra_surface_backup_o0_')), 'Pre-compilation backup should be destroyed')
+})
+
+test('formats scalar and boolean literals into vector constructors in fused shaders', () => {
+  const testEffect = {
+    name: 'testVec',
+    type: 'color',
+    inputs: [
+      { type: 'vec4', name: 'color', default: 1 },
+      { type: 'vec2', name: 'offset', default: 0 }
+    ],
+    glsl: 'return _c0 * color + vec4(offset, 0.0, 0.0);'
+  }
+  EFFECTS.set('testVec', testEffect)
+  try {
+    const compiled = compiledPlan([
+      {
+        op: 'hydra.gradient',
+        args: {},
+        from: null,
+        temp: 0
+      },
+      {
+        op: 'hydra.testVec',
+        args: { color: 0.5, offset: true },
+        from: 0,
+        temp: 1
+      }
+    ])
+    const shader = buildHydraShaderOverrides(compiled).shaderOverrides[1].testVec.glsl
+    assert.match(shader, /_hydra_testVec\(_hydra_node_0\(_st\), vec4\(0\.5\), vec2\(1\.0\)\)/)
+  } finally {
+    EFFECTS.delete('testVec')
+  }
+})
+

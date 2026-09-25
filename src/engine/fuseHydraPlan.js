@@ -5,7 +5,7 @@ import {
   isExecutableHydraEffect
 } from './hydraGlsl.js'
 
-const EFFECTS = new Map(
+export const EFFECTS = new Map(
   glslFunctions()
     .filter(isExecutableHydraEffect)
     .map(effect => [effect.name, effect])
@@ -69,9 +69,25 @@ function valueLiteral(value, input, temp, bindings, bindingTypes) {
     : value
 
   if (typeof resolved === 'number' && Number.isFinite(resolved)) {
-    return Number.isInteger(resolved) ? `${resolved}.0` : String(resolved)
+    const str = Object.is(resolved, -0) ? '-0.0' : String(resolved)
+    const floatLiteral = (!str.includes('.') && !str.includes('e') && !str.includes('E'))
+      ? `${str}.0`
+      : str
+    if (/^vec[234]$/.test(type)) {
+      return `${type}(${floatLiteral})`
+    }
+    if (type === 'float' || !type) {
+      return floatLiteral
+    }
+    return Number.isInteger(resolved) ? str : floatLiteral
   }
-  if (typeof resolved === 'boolean') return resolved ? 'true' : 'false'
+  if (typeof resolved === 'boolean') {
+    if (/^vec[234]$/.test(type)) {
+      return `${type}(${resolved ? '1.0' : '0.0'})`
+    }
+    if (type === 'float') return resolved ? '1.0' : '0.0'
+    return resolved ? 'true' : 'false'
+  }
   if (Array.isArray(resolved)) {
     if (!/^vec[234]$/.test(type)) throw new Error(`Unsupported Hydra input type '${type}'`)
     return `${type}(${resolved.map(item => valueLiteral(
@@ -338,7 +354,14 @@ function reconcileSurfaceFormats(
   preBackups = []
 ) {
   const pipeline = renderer.pipeline
-  if (!pipeline?.graph?.textures || !pipeline.backend?.textures || !pipeline.surfaces) return
+  if (!pipeline?.graph?.textures || !pipeline.backend?.textures || !pipeline.surfaces) {
+    for (const backup of preBackups) {
+      try {
+        pipeline?.backend?.destroyTexture?.(backup.name)
+      } catch (_) {}
+    }
+    return
+  }
 
   const promoted = new Set(outputSurfaces)
   const preserve = new Set(preserveSurfaces)
@@ -382,8 +405,8 @@ function reconcileSurfaceFormats(
     if (preserve.has(surface) && !backups.some(b => b.surface === surface)) {
       backups.push(backupSurfaceRead(pipeline, surface))
     }
-    pipeline.backend.destroyTexture(state.read)
-    pipeline.backend.destroyTexture(state.write)
+    try { pipeline.backend.destroyTexture(state.read) } catch (_) {}
+    try { pipeline.backend.destroyTexture(state.write) } catch (_) {}
     pipeline.surfaces.delete(surface)
     recreate = true
   }
@@ -396,7 +419,9 @@ function reconcileSurfaceFormats(
         pipeline.backend.copyTexture(backup.name, state.read)
       }
     } finally {
-      for (const backup of backups) pipeline.backend.destroyTexture(backup.name)
+      for (const backup of backups) {
+        try { pipeline.backend.destroyTexture(backup.name) } catch (_) {}
+      }
     }
   } else if (backups.length > 0) {
     try {
@@ -407,7 +432,9 @@ function reconcileSurfaceFormats(
         }
       }
     } finally {
-      for (const backup of backups) pipeline.backend.destroyTexture(backup.name)
+      for (const backup of backups) {
+        try { pipeline.backend.destroyTexture(backup.name) } catch (_) {}
+      }
     }
   }
   PROMOTED_SURFACES.set(renderer, current)
