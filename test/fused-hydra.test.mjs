@@ -1373,6 +1373,169 @@ test('compileWithHydraParity propagates structured parser subchain validation di
   )
 })
 
+test('compileWithHydraParity propagates structured parser call-form validation diagnostics attached to SyntaxError (P007)', async () => {
+  class CanvasRenderer {
+    async compile() {
+      return {}
+    }
+  }
+
+  const errP007 = new SyntaxError("Cannot mix positional and keyword arguments at line 2 col 14")
+  Object.defineProperty(errP007, 'diagnostic', {
+    value: {
+      code: 'P007',
+      stage: 'parser',
+      severity: 'error',
+      message: "Cannot mix positional and keyword arguments at line 2 col 14",
+      location: { line: 2, column: 14 },
+      span: null
+    },
+    writable: true,
+    configurable: true
+  })
+
+  let thrownErr = errP007
+  const engine = {
+    CanvasRenderer,
+    compile() {
+      throw thrownErr
+    }
+  }
+
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+
+  await assert.rejects(
+    async () => renderer.compile('search synth\ndiagProbe(1, x: 2)'),
+    (error) => {
+      assert.equal(error, errP007)
+      assert.equal(error.message, "Cannot mix positional and keyword arguments at line 2 col 14")
+      assert.deepEqual(error.diagnostic, {
+        code: 'P007',
+        stage: 'parser',
+        severity: 'error',
+        message: "Cannot mix positional and keyword arguments at line 2 col 14",
+        location: { line: 2, column: 14 },
+        span: null
+      })
+      return true
+    }
+  )
+
+  const errFromP007 = new SyntaxError("'from' requires exactly two arguments (namespace, call) at line 2 col 9")
+  Object.defineProperty(errFromP007, 'diagnostic', {
+    value: {
+      code: 'P007',
+      stage: 'parser',
+      severity: 'error',
+      message: "'from' requires exactly two arguments (namespace, call) at line 2 col 9",
+      location: { line: 2, column: 9 },
+      span: null
+    },
+    writable: true,
+    configurable: true
+  })
+
+  thrownErr = errFromP007
+  await assert.rejects(
+    async () => renderer.compile('search synth\nfrom(synth)'),
+    (error) => {
+      assert.equal(error, errFromP007)
+      assert.equal(error.message, "'from' requires exactly two arguments (namespace, call) at line 2 col 9")
+      assert.deepEqual(error.diagnostic, {
+        code: 'P007',
+        stage: 'parser',
+        severity: 'error',
+        message: "'from' requires exactly two arguments (namespace, call) at line 2 col 9",
+        location: { line: 2, column: 9 },
+        span: null
+      })
+      return true
+    }
+  )
+
+  const errUnlocatedP007 = new SyntaxError("Cannot mix positional and keyword arguments")
+  Object.defineProperty(errUnlocatedP007, 'diagnostic', {
+    value: {
+      code: 'P007',
+      stage: 'parser',
+      severity: 'error',
+      message: "Cannot mix positional and keyword arguments",
+      location: null,
+      span: null
+    },
+    writable: true,
+    configurable: true
+  })
+
+  thrownErr = errUnlocatedP007
+  await assert.rejects(
+    async () => renderer.compile('search synth\ndiagProbe(1, x: 2)'),
+    (error) => {
+      assert.equal(error, errUnlocatedP007)
+      assert.equal(error.message, "Cannot mix positional and keyword arguments")
+      assert.deepEqual(error.diagnostic, {
+        code: 'P007',
+        stage: 'parser',
+        severity: 'error',
+        message: "Cannot mix positional and keyword arguments",
+        location: null,
+        span: null
+      })
+      return true
+    }
+  )
+})
+
+test('compileWithHydraParity propagates structured parser expectation diagnostics with explicit null location and span attached to SyntaxError (P001)', async () => {
+  class CanvasRenderer {
+    async compile() {
+      return {}
+    }
+  }
+
+  const errNumberP001 = new SyntaxError("Expected number")
+  Object.defineProperty(errNumberP001, 'diagnostic', {
+    value: {
+      code: 'P001',
+      stage: 'parser',
+      severity: 'error',
+      message: "Expected number",
+      location: null,
+      span: null
+    },
+    writable: true,
+    configurable: true
+  })
+
+  const engine = {
+    CanvasRenderer,
+    compile() {
+      throw errNumberP001
+    }
+  }
+
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+
+  await assert.rejects(
+    async () => renderer.compile('search synth\nnoise([true])'),
+    (error) => {
+      assert.equal(error, errNumberP001)
+      assert.equal(error.message, "Expected number")
+      assert.deepEqual(error.diagnostic, {
+        code: 'P001',
+        stage: 'parser',
+        severity: 'error',
+        message: "Expected number",
+        location: null,
+        span: null
+      })
+      return true
+    }
+  )
+})
+
 test('formats boolean and numeric edge cases into valid GLSL in fused shaders', () => {
   const check = (speed) => {
     const compiled = compiledPlan([{
