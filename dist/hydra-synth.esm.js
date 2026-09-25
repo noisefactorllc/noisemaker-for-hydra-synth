@@ -1791,7 +1791,7 @@ function installHydraCompiler(engine) {
   const compile = prototype.compile;
   Object.defineProperty(prototype, INSTALLED, { value: true });
   prototype.compile = async function compileWithHydraParity(source, options = {}) {
-    const compiled = engine.compile(source);
+    const compiled = engine.compile(source, options);
     const hydra = buildHydraShaderOverrides(compiled);
     const previous = PROMOTED_SURFACES.get(this) || /* @__PURE__ */ new Map();
     const promoted = new Set(hydra.outputSurfaces);

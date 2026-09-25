@@ -1536,6 +1536,198 @@ test('compileWithHydraParity propagates structured parser expectation diagnostic
   )
 })
 
+test('compileWithHydraParity forwards options to engine.compile', async () => {
+  class CanvasRenderer {
+    async compile() {
+      return {}
+    }
+  }
+
+  let capturedSource = null
+  let capturedOptions = null
+  const engine = {
+    CanvasRenderer,
+    compile(source, options) {
+      capturedSource = source
+      capturedOptions = options
+      return {
+        plans: [],
+        diagnostics: []
+      }
+    }
+  }
+
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+  await renderer.compile('search hydra\nosc().write(o0)', { subchainArguments: 'strict' })
+
+  assert.equal(capturedSource, 'search hydra\nosc().write(o0)')
+  assert.deepEqual(capturedOptions, { subchainArguments: 'strict' })
+})
+
+test('compileWithHydraParity propagates numeric-coercion diagnostics with source position span attached to SyntaxError (P001)', async () => {
+  class CanvasRenderer {
+    async compile() {
+      return {}
+    }
+  }
+
+  const errNumberCoercionP001 = new SyntaxError("Expected number")
+  Object.defineProperty(errNumberCoercionP001, 'diagnostic', {
+    value: {
+      code: 'P001',
+      stage: 'parser',
+      severity: 'error',
+      message: "Expected number",
+      location: { line: 2, column: 9 },
+      span: { start: 21, end: 22 }
+    },
+    writable: true,
+    configurable: true
+  })
+
+  const engine = {
+    CanvasRenderer,
+    compile() {
+      throw errNumberCoercionP001
+    }
+  }
+
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+
+  await assert.rejects(
+    async () => renderer.compile('search synth\nlet x = [1] + 1'),
+    (error) => {
+      assert.equal(error, errNumberCoercionP001)
+      assert.equal(error.message, "Expected number")
+      assert.deepEqual(error.diagnostic, {
+        code: 'P001',
+        stage: 'parser',
+        severity: 'error',
+        message: "Expected number",
+        location: { line: 2, column: 9 },
+        span: { start: 21, end: 22 }
+      })
+      return true
+    }
+  )
+})
+
+test('compileWithHydraParity propagates structured parser subchain argument validation diagnostics attached to SyntaxError (P008, P009, P010)', async () => {
+  class CanvasRenderer {
+    async compile() {
+      return {}
+    }
+  }
+
+  const errP008 = new SyntaxError("Unknown subchain argument 'bad' at line 2 col 18. Valid keys: name, id. The value is discarded.")
+  Object.defineProperty(errP008, 'diagnostic', {
+    value: {
+      code: 'P008',
+      stage: 'parser',
+      severity: 'error',
+      message: "Unknown subchain argument 'bad' at line 2 col 18. Valid keys: name, id. The value is discarded.",
+      location: { line: 2, column: 18 },
+      span: { start: 30, end: 33 }
+    },
+    writable: true,
+    configurable: true
+  })
+
+  let thrownErr = errP008
+  const engine = {
+    CanvasRenderer,
+    compile() {
+      throw thrownErr
+    }
+  }
+
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+
+  await assert.rejects(
+    async () => renderer.compile('search synth\nnoise().subchain(bad: "x") { .noise() }.write(o0)', { subchainArguments: 'strict' }),
+    (error) => {
+      assert.equal(error, errP008)
+      assert.equal(error.message, "Unknown subchain argument 'bad' at line 2 col 18. Valid keys: name, id. The value is discarded.")
+      assert.deepEqual(error.diagnostic, {
+        code: 'P008',
+        stage: 'parser',
+        severity: 'error',
+        message: "Unknown subchain argument 'bad' at line 2 col 18. Valid keys: name, id. The value is discarded.",
+        location: { line: 2, column: 18 },
+        span: { start: 30, end: 33 }
+      })
+      return true
+    }
+  )
+
+  const errP009 = new SyntaxError("Duplicate subchain argument 'name' at line 2 col 28. Later values override earlier ones.")
+  Object.defineProperty(errP009, 'diagnostic', {
+    value: {
+      code: 'P009',
+      stage: 'parser',
+      severity: 'error',
+      message: "Duplicate subchain argument 'name' at line 2 col 28. Later values override earlier ones.",
+      location: { line: 2, column: 28 },
+      span: { start: 40, end: 44 }
+    },
+    writable: true,
+    configurable: true
+  })
+
+  thrownErr = errP009
+  await assert.rejects(
+    async () => renderer.compile('search synth\nnoise().subchain(name: "a", name: "b") { .noise() }.write(o0)', { subchainArguments: 'strict' }),
+    (error) => {
+      assert.equal(error, errP009)
+      assert.equal(error.message, "Duplicate subchain argument 'name' at line 2 col 28. Later values override earlier ones.")
+      assert.deepEqual(error.diagnostic, {
+        code: 'P009',
+        stage: 'parser',
+        severity: 'error',
+        message: "Duplicate subchain argument 'name' at line 2 col 28. Later values override earlier ones.",
+        location: { line: 2, column: 28 },
+        span: { start: 40, end: 44 }
+      })
+      return true
+    }
+  )
+
+  const errP010 = new SyntaxError("Missing ',' between subchain arguments at line 2 col 28")
+  Object.defineProperty(errP010, 'diagnostic', {
+    value: {
+      code: 'P010',
+      stage: 'parser',
+      severity: 'error',
+      message: "Missing ',' between subchain arguments at line 2 col 28",
+      location: { line: 2, column: 28 },
+      span: { start: 40, end: 44 }
+    },
+    writable: true,
+    configurable: true
+  })
+
+  thrownErr = errP010
+  await assert.rejects(
+    async () => renderer.compile('search synth\nnoise().subchain(name: "a" id: "b") { .noise() }.write(o0)', { subchainArguments: 'strict' }),
+    (error) => {
+      assert.equal(error, errP010)
+      assert.equal(error.message, "Missing ',' between subchain arguments at line 2 col 28")
+      assert.deepEqual(error.diagnostic, {
+        code: 'P010',
+        stage: 'parser',
+        severity: 'error',
+        message: "Missing ',' between subchain arguments at line 2 col 28",
+        location: { line: 2, column: 28 },
+        span: { start: 40, end: 44 }
+      })
+      return true
+    }
+  )
+})
+
 test('formats boolean and numeric edge cases into valid GLSL in fused shaders', () => {
   const check = (speed) => {
     const compiled = compiledPlan([{
