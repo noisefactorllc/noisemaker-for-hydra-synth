@@ -2,6 +2,13 @@
 
 ## 1. Source and authority revisions
 
+Daily review: 2026-09-25. Current inspected source: [`073f16d2c94140c55433e6beeb3d76f372b93700`](https://github.com/noisefactorllc/noisemaker-for-hydra-synth/commit/073f16d2c94140c55433e6beeb3d76f372b93700).
+Full rendered parity remains **unverified**. No release approval or new closure follows from this review.
+Current upstream discovery: `bbdeb56c4b75cf33379766c3e87b0f5a18bcbba8`. Published Noisemaker authority: `1.0.179`, source `fca611fd8f91424661d4e531d39313d24ea21134`, 210 effect IDs.
+The observations below retain their original source and authority identities; they do not qualify later updates.
+
+### Earlier source observations
+
 Observation: 2026-09-24. Current and tested port source: [`8e77ffccf410c05d9812daf5e7262bc5e55fc567`](https://github.com/noisefactorllc/noisemaker-for-hydra-synth/commit/8e77ffccf410c05d9812daf5e7262bc5e55fc567).
 Candidate version: `2.0.0-dev.0`. Local source matched remote `main` and remained unchanged during tests.
 Full parity: **unverified**. Release readiness: **blocked**. This report records a completed audit, not product qualification.
@@ -24,6 +31,9 @@ Current Hydra definitions contain 52 effects. The port registers 51 and excludes
 [Current inventory](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/coverage-inventory.json). Every later runtime, packaging, or authority change requires fresh evidence.
 
 ## 2. Host and distribution matrix
+
+Current tests and qualification limits are in [section 3](#3-parity-coverage).
+The matrix below retains the earlier measured scope. A historical verified row is not a current-source or full-platform certification.
 
 | Dimension | Status | Measured scope or remaining limit |
 |---|---|---|
@@ -52,6 +62,14 @@ The packed HTML example remains subject to runtime checks. Browser modules do no
 
 ## 3. Parity coverage
 
+### Daily review, 2026-09-25
+
+37 unit tests pass. The existing browser suite renders 58 cases and reports 58 passes with zero failures against its retained upstream Hydra bundle. That gate does not pin the current Noisemaker authority or qualify the whole catalog. The packed HTML still calls the removed Hydra constructor; GAP-004 remains open. [Raw evidence](/Users/alex/.codex/automations/noisemaker-port-completion-audit/review-20260925-053200/hydra-synth-browser-tests.json).
+
+The current full case denominator remains incomplete. Missing parameters, hosts, external inputs, and stateful sequences remain qualification gaps. No skip or tolerated difference counts as exact parity.
+
+### Earlier measurements
+
 Exact equality means zero differing RGBA channels. No tolerance, NEAR result, or compile-only result counts as an exact pass.
 Unknown counts remain `not measured`. Missing cases do not reduce the full-parity denominator.
 
@@ -75,6 +93,10 @@ Therefore, a green comparison against that bundle cannot prove current source be
 No candidate output replaced a golden. No fixture, generator, tolerance, implementation, or workflow changed.
 
 ## 4. Evidence
+
+Review CI boundary: No workflow run exists at the inspected source SHA. A passing export dispatch does not qualify rendered parity. Current complete-render enforcement remains an open verification requirement. [Exact-source responses and workflows](/Users/alex/.codex/automations/noisemaker-port-completion-audit/review-20260925-053200/noisemaker-for-hydra-synth-remote-evidence.json).
+
+The current distribution HTML independently produces `Hydra is not defined` and zero canvases in Chrome. [Probe](/Users/alex/.codex/automations/noisemaker-port-completion-audit/review-20260925-053200/hydra-synth-html-current.json).
 
 | Command or check | Exit or outcome | Evidence |
 |---|---|---|
@@ -101,6 +123,9 @@ The audit inspected both references on 2026-09-24. Full editor behavior does not
 
 ## 5. Open compatibility limits
 
+Next bounded check: Repair the packed HTML in the implementation job, then open the npm tarball example without checkout-only files. Require a rendered first frame, editable parameters, and recovery from invalid input. Rerun all 58 browser cases with both authority hashes recorded, then account for missing API, WGSL, and current-catalog cases.
+See the stable entries in [completion gaps](COMPLETION_GAPS.md).
+
 See [completion gaps](COMPLETION_GAPS.md#4-known-gaps) for stable IDs, dependencies, and acceptance criteria.
 
 1. Reconcile `sum`, immutable references, and full expected coverage in GAP-001.
@@ -114,6 +139,8 @@ All eligible ports retain equal priority. Full parity requires no missing or ski
 The implementation job owns corrections. This audit does not advance the parity checkpoint.
 
 ## 6. History
+
+2026-09-25 daily review at `073f16d2c94140c55433e6beeb3d76f372b93700`: source freshness and bounded evidence reviewed; open qualification limits retained. [Retained review evidence](/Users/alex/.codex/automations/noisemaker-port-completion-audit/review-20260925-053200/hydra-synth-browser-tests.json). No new closure claimed.
 
 | Date | Source | Result | Change |
 |---|---|---|---|
