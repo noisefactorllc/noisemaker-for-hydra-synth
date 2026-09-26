@@ -1,0 +1,98 @@
+{
+  "run": "gap-003-distribution-qualification",
+  "date": "2026-09-26",
+  "source_identity": "The containing commit identifies the tested tree. Docs, package.json, README, and CHANGELOG edits only; no src/ or dist/ bytes changed (bundle SHA-256 receipts unchanged from the retained 2026-09-26 build receipt).",
+  "environment": {
+    "os": "Debian GNU/Linux 12 (bookworm), x86_64 container",
+    "node": "26.5.1",
+    "npm": "11.17.0",
+    "browser": "Chromium 154.0.8037.57 (headless, WebGL2 via SwiftShader)",
+    "chromium_path": "/usr/bin/chromium"
+  },
+  "engine_identity": {
+    "cdn": "https://shaders.noisedeck.app/1",
+    "core_bundle": "noisemaker-shaders-core.esm.min.js",
+    "fetch": "curl -s -D core-headers.txt -o core.esm.min.js https://shaders.noisedeck.app/1/noisemaker-shaders-core.esm.min.js",
+    "core_sha256": "31b766091125742665bee4c5c8392048eaaa786748cc9570b1c94460029fbded",
+    "core_last_modified": "Sat, 26 Sep 2026 01:49:01 GMT",
+    "content_length": 412659,
+    "correlation": "Hash equals the retained 2026-09-26 receipt correlated with upstream noisefactorllc/noisemaker release tag v1.0.185 (range end 6a0af04d3c4f345ffab5e9f8e54e532216b4cdaa); GitHub releases list tags v1.0.181..v1.0.185 with v1.0.185 latest. The served engine bytes are unchanged since that correlation.",
+    "rolling_contract": "The /1 base path is rolling; the README declares the pinning option ({ cdn: <basePath> } or { engine }) and the offline-use limit."
+  },
+  "spdx_metadata": {
+    "before": "\"license\": \"AGPL\" (not an exact SPDX identifier)",
+    "after": "\"license\": \"AGPL-3.0-only\"",
+    "basis": "LICENSE is the verbatim GNU AGPL v3, 19 November 2007 text. grep for 'or later' over LICENSE and src/ returns zero matches and no source header elects later versions, so the repository grants version 3 without a later-version election. Upstream hydra-synth publishes only the non-SPDX string 'AGPL' (registry 1.4.0 and repository package.json), so no upstream election is inherited.",
+    "upstream_license_field": "AGPL (non-SPDX), https://github.com/hydra-synth/hydra-synth and registry.npmjs.org/hydra-synth 1.4.0"
+  },
+  "changelog": {
+    "before": "Only retained upstream hydra-synth history (through [1.4] - 2025-09-24); no entry described the current module migration.",
+    "after": "A [2.0.0-dev.0] section documents the native Noisemaker port: loadHydraEffects() module API, window.HydraEffects global entry, DEFAULT_CDN/loadEngine/getEngine/HYDRA_NAMESPACE exports, hydra-namespace names, the sum exclusion, the WebGL2-only renderer, the offline limit, the AGPL-3.0-only metadata fix, and the dependency contract. Upstream history is retained below it for attribution with a note that it predates this module."
+  },
+  "dependency_contract": {
+    "production_dependencies": {},
+    "dev_dependencies": { "esbuild": "^0.25.0", "http-server": "^14.1.1" },
+    "dev_engines_floors": { "esbuild": "node >=18", "http-server": "node >=12" },
+    "declared_node_floor": "Node >= 18 for npm run build / npm test (esbuild engine floor; suites exercised on Node 26.5.1)",
+    "runtime_dependency": "The Noisemaker engine bundle loaded at runtime from https://shaders.noisedeck.app/1; pinning and offline limits declared in README 'Requirements and dependency contract'."
+  },
+  "commands": [
+    {
+      "command": "npm ci --ignore-scripts --bin-links=false --no-audit --no-fund",
+      "exit": 0,
+      "result": "46 packages installed; symlink-free tree preserved"
+    },
+    {
+      "command": "npm run build",
+      "exit": 0,
+      "result": "Isolated build reproduced all four tracked bundle hashes byte-for-byte",
+      "bundle_sha256": {
+        "dist/hydra-synth.js": "08c5f3de924b44e9cec7d30b4fdb82cac62558c34fc37ffc820c30b772493aa7",
+        "dist/hydra-synth.esm.js": "847f674ae6265ae1ae41481dbb30d296e983583f3b7aa2f6e9feb205876743bd",
+        "dist/hydra-synth.esm.min.js": "0d3f680e3bcfafdbf03bbbd198a3f419463283dcba5daf8621649a7d2f889fc4",
+        "dist/hydra-synth.min.js": "e545d9fe58bf3984668b291988051c948c3fcd487baf680d5b0b3b5b37b4f4c7"
+      }
+    },
+    {
+      "command": "node --test test/*.test.mjs",
+      "exit": 0,
+      "result": "46 pass, 0 fail, 0 skipped (includes the packed-install lifecycle test)"
+    },
+    {
+      "command": "node --test test/installed-workflow.test.mjs",
+      "exit": 0,
+      "result": "1 pass: pack, isolated install, both entry points exercised in headless Chromium, reinstall, remove"
+    },
+    {
+      "command": "CHROME=/usr/bin/chromium PORT=8765 node scripts/test.mjs",
+      "exit": 1,
+      "result": "57 exact comparisons and 1 known host residual: rotate_animated_parameter, 96/16384 bytes differ, max delta 1 — identical to the retained Linux receipt (candidate 9e7520bcd9457a243349736faeebda77a7f0bd4d, COMPATIBILITY.md 2026-09-26). Host animated-parameter precision residual; the qualified macOS 58/58 record stands unchanged. No doc or metadata edit touches rendered bytes."
+    }
+  ],
+  "pack_contents": {
+    "command": "npm pack --json",
+    "version": "2.0.0-dev.0",
+    "files": 31,
+    "files_list_note": "31 packed files, including this receipt (workflow-evidence/gap-003/distribution-qualification.json). No archive links; all files are regular files.",
+    "packed_package_json": { "license": "AGPL-3.0-only", "dependencies": {} },
+    "packed_file_match": "The packed tarball was extracted and all 31 packed files were byte-compared (`cmp`) against the checkout: 31 checked, 0 differences. A self-inclusive tarball digest is not recorded because the receipt is packed inside the archive."
+  },
+  "isolated_consumer": {
+    "command": "npm install --ignore-scripts --bin-links=false --no-audit --no-fund <tarball>",
+    "exit": 0,
+    "esm_entry": "node consumer check: import of the installed package resolves and exposes the six documented exports (DEFAULT_CDN, HYDRA_NAMESPACE, getEngine, loadEngine, loadHydraEffects, registerHydraEffects) with DEFAULT_CDN 'https://shaders.noisedeck.app/1'. Full effect registration through both entry points is exercised in headless Chromium 154 by test/installed-workflow.test.mjs (exit 0, including README result, recovery, resize, 12 lifecycle cycles, reinstall, removal).",
+    "global_entry": "dist/hydra-synth.js exposes window.HydraEffects.loadHydraEffects (exercised by test/installed-workflow.test.mjs in headless Chromium 154)"
+  },
+  "registry_state": {
+    "npm_view_version": "exit 1, E404 (no published noisemaker-for-hydra-synth)",
+    "registry": "{\"error\":\"Not found\"}",
+    "upgrade_check": "Same-candidate reinstall only; no registry version exists to upgrade from (unchanged limit)."
+  },
+  "remaining_limits": [
+    "GAP-004: the packed dist/index.html example still calls the removed Hydra constructor and does not render.",
+    "GAP-005: no exact-source CI gate exists; zero workflow runs for the reviewed SHA.",
+    "No published package, release, or registry-upgrade path; upgrade evidence is same-candidate reinstall only.",
+    "GAP-003 remains open: full acceptance (installed examples on declared hosts, error recovery, upgrade, removal at release quality) and the release decision remain outstanding."
+  ],
+  "scope": "Metadata, notices, dependency contract, engine-identity receipt, and re-run package/entry-point checks for GAP-003's 'Define the candidate's support and dependency contract. Qualify notices, metadata' next action. GAP-003 is not closed by this evidence."
+}

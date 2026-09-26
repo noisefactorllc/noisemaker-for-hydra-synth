@@ -1,5 +1,26 @@
 # Changelog
 
+This file retains the upstream `hydra-synth` history below unchanged for attribution. Entries describing this module (`noisemaker-for-hydra-synth`) appear above those historical sections.
+
+## [2.0.0-dev.0] - Unreleased
+
+The candidate is a native port of Hydra's GLSL effects to the Noisemaker shader engine, not an incremental upstream release. Changes versus the retained `hydra-synth` 1.4 history:
+
+### Added
+- `loadHydraEffects()` module API that loads the Noisemaker engine at runtime from the engine CDN (`https://shaders.noisedeck.app/1`, the rolling `/1` base path; a host may pin an immutable copy by passing `{ cdn: <basePath> }`) and registers the `hydra` namespace of ported effects.
+- `DEFAULT_CDN`, `loadEngine`, `getEngine`, `HYDRA_NAMESPACE` exports and the `window.HydraEffects` global bundle entry point.
+- Effect names exposed under the `hydra` namespace (for example `hydraOsc`); Noisemaker reserves `osc` for animated parameters.
+- 51 of Hydra's 52 catalog effects; `sum` is excluded by the port (`isExecutableHydraEffect`) and is not yet executable on the engine (GAP-001).
+
+### Changed
+- Effect evaluation now runs through the Noisemaker renderer (WebGL2) instead of the upstream Hydra GLSL runtime; WebGPU is not supported.
+- Offline use is not supported: the engine bundle loads from the CDN at runtime.
+- Package metadata now declares the exact SPDX identifier `AGPL-3.0-only`, matching the verbatim AGPLv3 `LICENSE` text (no later-version election exists in this repository). The package has no production npm dependencies; build and test tooling is dev-only (`esbuild`, `http-server`).
+
+### Known limits
+- The packed `dist/index.html` example still calls the removed `Hydra` constructor and does not render (GAP-004).
+- Full rendered parity, published release, and upgrade qualification remain open (GAP-001, GAP-002, GAP-003, GAP-005).
+
 ## [1.4] - 2025-09-24
 ### Fixed
 - hard crashing when inputting invalid texture, fixed by @ojack and @ffd8

@@ -60,6 +60,13 @@ Resource ownership:
 
 The historical `hydra-synth.js` artifact name is retained for the editor's internal bundle path. The project identity is `Noisemaker for Hydra Synth` and the repository/package name is `noisemaker-for-hydra-synth`.
 
+## Requirements and dependency contract
+
+- **Runtime dependency:** the package has no production npm dependencies. Its one runtime dependency is the Noisemaker engine bundle, which `loadHydraEffects()` loads from the engine CDN `https://shaders.noisedeck.app/1` at runtime. The `/1` base path is rolling: served engine bytes move with upstream releases, so offline use is not supported and a host that needs an immutable engine can pin a copy by passing `{ cdn: <basePath> }` (or a preloaded engine via `{ engine }`). A served-byte identity receipt (SHA-256 and Last-Modified, correlated to the upstream release tag) is recorded in `docs/COMPATIBILITY.md` and `workflow-evidence/gap-003/`.
+- **Browser runtime:** any browser with a WebGL2 implementation and network access to the engine CDN, per [Supported hosts](#supported-hosts-and-ownership). WebGPU is not supported.
+- **Development tooling:** `npm run build` and `npm test` require Node >= 18 (the `esbuild` engine floor; `http-server` needs >= 12). The suites were exercised on Node 26.5.1; no browser-runtime Node requirement exists.
+- **License:** AGPL-3.0-only, matching the verbatim AGPLv3 `LICENSE` text.
+
 ## Develop and verify
 
 ```sh

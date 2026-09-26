@@ -29,7 +29,7 @@
     "noisemaker"
   ],
   "author": "ojack",
-  "license": "AGPL",
+  "license": "AGPL-3.0-only",
   "dependencies": {},
   "devDependencies": {
     "esbuild": "^0.25.0",
