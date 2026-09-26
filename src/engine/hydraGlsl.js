@@ -1,5 +1,5 @@
 export function isExecutableHydraEffect(effect) {
-  return effect.name !== 'sum'
+  return Boolean(effect && effect.name && effect.glsl)
 }
 
 export function hydraGlslBody(effect) {

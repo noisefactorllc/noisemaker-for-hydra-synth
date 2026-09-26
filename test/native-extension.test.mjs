@@ -58,7 +58,7 @@ test('registers the hydra namespace before native effects', () => {
   const effects = engine.calls.filter(([kind]) => kind === 'effect')
   assert.ok(effects.length > 0)
   assert.ok(effects.every(([, , definition]) => definition.namespace === 'hydra'))
-  assert.ok(effects.every(([, , definition]) => definition.func !== 'sum'))
+  assert.ok(effects.some(([, , definition]) => definition.func === 'sum'))
   assert.ok(effects.every(([, , definition]) => (
     definition.textures?.out?.format === 'rgba32f'
   )))

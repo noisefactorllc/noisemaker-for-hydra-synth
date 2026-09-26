@@ -3,20 +3,44 @@
  * Single-command CI: spawn http-server, run exact browser pixel parity in
  * headless Chrome, parse pass/fail counts, and exit non-zero on failure.
  *
- * Designed to run on macOS with Google Chrome installed at the standard
- * path. CI on other platforms will need to override CHROME with an env var.
+ * Designed to find an executable Chrome/Chromium via the CHROME env var or a
+ * list of common install paths (macOS, Linux, snap). The selected binary is
+ * reported in the output so parity evidence records its provenance.
  */
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { accessSync, constants, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
-const CHROME = process.env.CHROME ||
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
+const CHROME_CANDIDATES = process.env.CHROME ? [process.env.CHROME] : [
+  process.env.CHROME_BIN,
+  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+  '/usr/bin/google-chrome',
+  '/usr/bin/google-chrome-stable',
+  '/usr/bin/chromium',
+  '/usr/bin/chromium-browser',
+  '/snap/bin/chromium'
+].filter(Boolean)
+const CHROME = CHROME_CANDIDATES.find(p => {
+  try {
+    if (statSync(p).isFile() && accessSync(p, constants.X_OK) === undefined) return true
+    console.error(`[test] Chrome candidate not an executable file: ${p}`)
+    return false
+  } catch (_e) { return false }
+})
+if (!CHROME) {
+  if (process.env.CHROME) {
+    console.error(`[test] CHROME is set but not an executable file: ${process.env.CHROME}. Refusing to fall through to another candidate.`)
+  } else {
+    console.error(`No executable Chrome found. Tried: ${CHROME_CANDIDATES.join(', ')}. Set CHROME=<path>.`)
+  }
+  process.exit(1)
+}
+console.log(`[test] using Chrome binary: ${CHROME}`)
 const PORT = process.env.PORT || 8765
 const LEGACY_BUNDLE = join(process.cwd(), 'dev-noisemaker', '.legacy-hydra-synth.js')
 const SWEEPS = [
-  { url: '/dev-noisemaker/pixel-parity.html', name: 'pixel-parity', expectPass: 58 }
+  { url: '/dev-noisemaker/pixel-parity.html', name: 'pixel-parity', expectPass: 62 }
 ]
 
 function startServer() {

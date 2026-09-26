@@ -47,8 +47,14 @@
       return `${name}(${args.join(', ')})`
     }
 
+    // The published legacy authority bundle's `sum` body references an
+    // undefined identifier `s` (upstream fixed it in source later), so legacy
+    // Hydra cannot render `sum` as a comparison side. `sum` stays registered
+    // in the port (current Hydra source semantics) and is qualified by the
+    // `sum_reference` case below, which compares the port against the
+    // documented formula instead of the broken legacy shader.
     const FIXTURES = glslFunctions()
-      .filter(effect => isExecutableHydraEffect(effect) && !['src', 'prev'].includes(effect.name))
+      .filter(effect => isExecutableHydraEffect(effect) && !['src', 'prev', 'sum'].includes(effect.name))
       .map(effect => {
         const args = effect.inputs.map(input => input.default)
         const call = effectCall(effect)
@@ -104,8 +110,64 @@
         dslSetup: 'gradient(speed: 0).write(o0)',
         legacy: hydra => hydra.synth.prev(),
         dsl: 'prev()'
+      },
+      {
+        name: 'parameter_matrix',
+        time: 0.25,
+        legacy: hydra => hydra.synth.noise(3, 2.5).posterize(5, 0.7).shift(0.1, 0.2, 0.3, 0.4),
+        dsl: 'noise(scale: 3, offset: 2.5).posterize(bins: 5, gamma: 0.7).shift(r: 0.1, g: 0.2, b: 0.3, a: 0.4)'
+      },
+      {
+        // Second bounded matrix point: a color-space chain with non-default
+        // parameters (contrast, hue rotation, saturation) at a nonzero time.
+        name: 'parameter_matrix_color',
+        time: 0.1,
+        legacy: hydra => hydra.synth.gradient(0).contrast(1.7).hue(0.35).saturate(2.5),
+        dsl: 'gradient(speed: 0).contrast(amount: 1.7).hue(hue: 0.35).saturate(amount: 2.5)'
+      },
+      {
+        // Current Hydra source reference: gradient = vec4(_st, sin(time*speed), 1.0)
+        // with speed 0 → (x, y, 0, 1); sum(scale) = vec4(vec3(v.r+v.g+v.b+v.a), _c0.a).
+        // With scale = 0.25 per channel: rgb = 0.25*(x + y + 1), alpha = 1.
+        // Disclosure: the formula and the fixed body are corroborated in-tree
+        // against the pinned Hydra authority commit 9d29a9f4 (see
+        // workflow-evidence/gap-001/current-hydra-sum-source.txt); the
+        // rendered comparison remains formula-bound, not legacy-pixel-bound.
+        name: 'sum_reference',
+        reference: (x, y) => {
+          const v = 0.25 * (x + y + 1)
+          return [v, v, v, 1]
+        },
+        dsl: 'gradient(speed: 0).sum(scale: [0.25, 0.25, 0.25, 0.25])'
+      },
+      {
+        // Default-scale path: sum() with no arguments resolves the vec4
+        // default [1, 1, 1, 1]; rgb = x + y + 1 >= 1 (clamped white), a = 1.
+        // Covers the vec4-default resolution through the DSL without an
+        // explicit scale argument.
+        name: 'sum_default_scale',
+        reference: () => [1, 1, 1, 1],
+        dsl: 'gradient(speed: 0).sum()'
       }
     )
+
+    function referencePixels(fixture) {
+      const data = new Uint8ClampedArray(64 * 64 * 4)
+      for (let py = 0; py < 64; py++) {
+        for (let px = 0; px < 64; px++) {
+          // Match the GLSL pixel-center mapping: st = gl_FragCoord/resolution.
+          const x = (2 * px + 1) / 128
+          const y = (2 * py + 1) / 128
+          const [r, g, b, a] = fixture.reference(x, y)
+          const o = (py * 64 + px) * 4
+          data[o] = Math.round(Math.min(Math.max(r, 0), 1) * 255)
+          data[o + 1] = Math.round(Math.min(Math.max(g, 0), 1) * 255)
+          data[o + 2] = Math.round(Math.min(Math.max(b, 0), 1) * 255)
+          data[o + 3] = Math.round(Math.min(Math.max(a, 0), 1) * 255)
+        }
+      }
+      return data
+    }
 
     function pixels(canvas) {
       const copy = document.createElement('canvas')
@@ -249,7 +311,7 @@
       let fail = 0
 
       for (const fixture of FIXTURES) {
-        const expected = renderLegacy(legacy, legacyCanvas, fixture)
+        const expected = fixture.reference ? referencePixels(fixture) : renderLegacy(legacy, legacyCanvas, fixture)
         const actual = await renderPorted(ported, portedCanvas, fixture)
         const result = compare(actual, expected)
         if (result.differingBytes === 0) {

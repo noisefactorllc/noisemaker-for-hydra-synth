@@ -10,7 +10,7 @@ The candidate is a native port of Hydra's GLSL effects to the Noisemaker shader 
 - `loadHydraEffects()` module API that loads the Noisemaker engine at runtime from the engine CDN (`https://shaders.noisedeck.app/1`, the rolling `/1` base path; a host may pin an immutable copy by passing `{ cdn: <basePath> }`) and registers the `hydra` namespace of ported effects.
 - `DEFAULT_CDN`, `loadEngine`, `getEngine`, `HYDRA_NAMESPACE` exports and the `window.HydraEffects` global bundle entry point.
 - Effect names exposed under the `hydra` namespace (for example `hydraOsc`); Noisemaker reserves `osc` for animated parameters.
-- 51 of Hydra's 52 catalog effects; `sum` is excluded by the port (`isExecutableHydraEffect`) and is not yet executable on the engine (GAP-001).
+- All 52 of Hydra's catalog effects; `sum` carries the fixed body corroborated against pinned Hydra commit `9d29a9f4fd8f9081b9759943f38db36f05b9a88f` (GAP-001).
 
 ### Changed
 - Effect evaluation now runs through the Noisemaker renderer (WebGL2) instead of the upstream Hydra GLSL runtime; WebGPU is not supported.

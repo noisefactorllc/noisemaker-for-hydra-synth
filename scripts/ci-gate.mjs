@@ -5,7 +5,7 @@
  * portion of the gate:
  *
  *  - Every expected case executes: ok + fail must equal the full
- *    denominator (58 cases), enforced from independent per-case line
+ *    denominator (62 cases), enforced from independent per-case line
  *    accounting. Missing cases fail the gate.
  *  - Failure policy (criterion: "mismatches must fail qualification"):
  *    strict only. The sweep must be fully exact (0 failures). There is
@@ -72,10 +72,14 @@ const LEGACY_BUNDLE_SHA256 = 'b4881aa9dfbd990a9e37fe6766581816fc273cdd42471e13bf
 // be an unratified policy weakening of the criterion. A host that cannot
 // produce an exact sweep fails the gate, by design, until the residual is
 // fixed or the policy change is explicitly ratified by the actor with
-// workflow authority (the qualified macOS host record is 58/58 exact).
-// The GAP-001 complete expected-case inventory remains open and is not
-// claimed by this runner.
-const TOTAL_CASES = 58
+// workflow authority (the qualified macOS host record for the legacy
+// 58-case suite is 58/58 exact). The GAP-001 complete expected-case
+// inventory remains open and is not claimed by this runner.
+// The page now emits 62 cases: `sum` was never a generated legacy case (the
+// authority bundle's sum shader cannot compile) and stays excluded there; the
+// two ADDED cases are the `sum_reference` formula comparison and
+// `parameter_matrix`. Denominator is 60.
+const TOTAL_CASES = 62
 
 function startServer(port) {
   // Installs use --bin-links=false, so no http-server binary exists; run it
@@ -186,7 +190,7 @@ export function evaluateSweep(summary, totalCases) {
 
 export function parseSummary(domText) {
   // Each sweep page emits a final line like:
-  //   `=== 57 ok, 1 fail / 58 total ===`
+  //   `=== 61 ok, 1 fail / 62 total ===`
   // and individual `FAIL ...` / `THROW ...` lines. Pull both out of the log
   // div content (same protocol as scripts/test.mjs).
   const logMatch = domText.match(/<div id="log">([\s\S]*)<\/div>\s*<script/)
