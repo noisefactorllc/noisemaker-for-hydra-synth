@@ -1,0 +1,65 @@
+{
+  "run": "gap-004-packed-html-verification",
+  "date": "2026-09-26",
+  "source_identity": "The containing commit identifies the tested tree. The only shipped-bytes change is dist/index.html; all four bundle hashes remain byte-identical to the retained build receipt.",
+  "environment": {
+    "os": "Debian GNU/Linux 12 (bookworm), x86_64 container",
+    "node": "26.5.1",
+    "npm": "11.17.0",
+    "browser": "Chromium 154.0.8037.57 (headless, WebGL2 via SwiftShader)",
+    "chromium_path": "/usr/bin/chromium"
+  },
+  "change": {
+    "before": "dist/index.html called the removed `new Hydra()` constructor and ran `osc(2).out()`; Chrome reported `Hydra is not defined` and no canvas existed.",
+    "after": "dist/index.html uses the current public bundle API: `window.HydraEffects.loadHydraEffects()`, a caller-owned 320x240 canvas, `new engine.CanvasRenderer({ canvas, basePath: window.HydraEffects.DEFAULT_CDN, bundlePath: ..., useBundles: true, preferWebGPU: false })`, `loadManifest()`, `compile('search hydra\\nhydraOsc(frequency: 30, sync: 0.1, offset: 0.1).write(o0)')`, and `renderer.start()`. No bundle bytes changed (build reproduction below)."
+  },
+  "commands": [
+    {
+      "command": "npm pack noisemaker-for-hydra-synth && tar -xzf … into a scratch directory",
+      "exit": 0,
+      "result": "The verification ran against the packed tarball's dist/index.html and dist/hydra-synth.js, not the checkout copy"
+    },
+    {
+      "command": "node node_modules/http-server/bin/http-server -p 8799 -s (serving the extracted tree)",
+      "exit": 0,
+      "result": "Packed tree served at http://localhost:8799/dist/index.html"
+    },
+    {
+      "command": "chromium --headless --no-sandbox --window-size=1024,1024 --virtual-time-budget=60000 --enable-logging=stderr --v=0 --dump-dom http://localhost:8799/dist/index.html",
+      "exit": 0,
+      "result": "Canvas present in the served page (grep '<canvas' = 1); console logged 'example ready'; zero 'Uncaught' errors, zero 'Hydra is not defined' occurrences"
+    },
+    {
+      "command": "Same served page with an appended scratch probe module (packed page unmodified; the probe samples the canvas 4 times at 300 ms intervals via 2d-canvas drawImage + getImageData and writes a summary div): --dump-dom as above",
+      "exit": 0,
+      "result": "PROBE 3072|150,163,175 ; 3072|177,188,199 ; 3072|178,189,200 ; 3072|178,189,200 ; distinct=3 — four 64x48 samples (12,288 channels each) with three distinct pixel signatures, so the rendered output changes over time",
+      "probe_limitation": "The sampler uses 2d drawImage of the WebGL canvas; sample 4 equals sample 3 because the virtual-time budget had exhausted further frames. Changing output is claimed only as 'three distinct samples across four probes in headless Chromium'; cross-machine stability is not claimed."
+    },
+    {
+      "command": "npm run build",
+      "exit": 0,
+      "result": "All four bundle hashes reproduced byte-for-byte (bundle reproduction required check)",
+      "bundle_sha256": {
+        "dist/hydra-synth.js": "08c5f3de924b44e9cec7d30b4fdb82cac62558c34fc37ffc820c30b772493aa7",
+        "dist/hydra-synth.esm.js": "847f674ae6265ae1ae41481dbb30d296e983583f3b7aa2f6e9feb205876743bd",
+        "dist/hydra-synth.esm.min.js": "0d3f680e3bcfafdbf03bbbd198a3f419463283dcba5daf8621649a7d2f889fc4",
+        "dist/hydra-synth.min.js": "e545d9fe58bf3984668b291988051c948c3fcd487baf680d5b0b3b5b37b4f4c7"
+      }
+    },
+    {
+      "command": "node --test test/*.test.mjs",
+      "exit": 0,
+      "result": "46 pass, 0 fail, 0 skipped"
+    }
+  ],
+  "acceptance": {
+    "canvas": "verified: <canvas id=\"hydra-canvas\"> present in the served packed page",
+    "changing_output": "verified: three distinct 64x48 pixel samples across four probes",
+    "zero_page_errors": "verified: zero 'Uncaught' console errors and zero 'Hydra is not defined' occurrences in stderr; 'example ready' logged"
+  },
+  "limits": [
+    "Verified on Linux Chromium 154 headless (SwiftShader WebGL2) only; no additional-host run.",
+    "The probe wrapper used for pixel sampling is a scratch file and is not shipped or committed."
+  ],
+  "scope": "Closes GAP-004's acceptance criteria (packed-file browser execution and bundle reproduction). GAP-003's remaining release items (exact-source CI gate via GAP-005, published upgrade) are unchanged."
+}

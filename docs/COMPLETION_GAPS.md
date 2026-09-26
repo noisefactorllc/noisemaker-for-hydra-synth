@@ -41,7 +41,7 @@ The existing push notification webhook remains unchanged. This documentation pus
 | CLAIM-001 | [README](https://github.com/noisefactorllc/noisemaker-for-hydra-synth/blob/8e77ffccf410c05d9812daf5e7262bc5e55fc567/README.md) | Exact pixel tests, including native/Hydra transitions | supported | 58/58 existing comparisons pass exactly at 64×64. This finding covers only those fixtures. |
 | CLAIM-002 | [Module example](https://github.com/noisefactorllc/noisemaker-for-hydra-synth/blob/8e77ffccf410c05d9812daf5e7262bc5e55fc567/README.md) | Human usability: installed first result and integration | partial | README output, changed frequency, mixed invert, diagnostics, recovery, resize, disposal, and removal pass. Broader lifecycle qualification remains open. |
 | CLAIM-003 | [Package](https://github.com/noisefactorllc/noisemaker-for-hydra-synth/blob/8e77ffccf410c05d9812daf5e7262bc5e55fc567/package.json) | Ecosystem fit and host compatibility | partial | Browser ESM and global bundle load. WebGL2 works on Chrome 153 and Apple M4. WebGPU fails. Minimum versions remain undefined. |
-| CLAIM-004 | [Package and distribution](https://github.com/noisefactorllc/noisemaker-for-hydra-synth/blob/8e77ffccf410c05d9812daf5e7262bc5e55fc567/dist/index.html) | Release readiness | partial | All 28 packed files match source. Four bundles reproduce exactly. The packed HTML example fails. No release or upgrade qualification exists. |
+| CLAIM-004 | [Package and distribution](https://github.com/noisefactorllc/noisemaker-for-hydra-synth/blob/8e77ffccf410c05d9812daf5e7262bc5e55fc567/dist/index.html) | Release readiness | partial | All 28 packed files match source. Four bundles reproduce exactly. The packed HTML example fails. No release or upgrade qualification exists. (2026-09-26: the packed HTML example was corrected and verified — GAP-004 closed; the release/upgrade qualification part remains open.) |
 | CLAIM-005 | [Exact-source Actions](https://github.com/noisefactorllc/noisemaker-for-hydra-synth/actions?query=head_sha%3A8e77ffccf410c05d9812daf5e7262bc5e55fc567) | Automated validation of source updates | unverified | No workflow, source run, or enforced rendered gate exists. GAP-005. |
 
 Full parity remains unqualified. The 52-effect current Hydra inventory includes unsupported `sum`.
@@ -109,7 +109,7 @@ The upgrade check is a same-candidate reinstall; no published registry version e
 ## 4. Known gaps
 
 P1 means false completion or major correctness failure. P2 means coverage or integration uncertainty. P3 means documentation inconsistency.
-No gap closed during this audit.
+GAP-004 closed 2026-09-26; all other gaps remain open.
 
 ### GAP-001: current authority and parity qualification
 
@@ -144,30 +144,31 @@ No gap closed during this audit.
 - Status: open. Priority: P2. Category: release.
 - Affected scope: `package.json`, packed contents, notices, dependency identity, version promises, and release evidence.
 - Expected behavior: The artifact has working entry points, complete notices, reproducible bytes, and declared installation requirements.
-- Observed behavior: All 28 packed files match source. Four bundles reproduce. The candidate includes AGPLv3 text and no declared production npm dependencies.
-- Distribution qualification, 2026-09-26: `package.json` now declares the exact SPDX identifier `AGPL-3.0-only` — `LICENSE` is the verbatim AGPLv3 text, no later-version election exists in the tree, and upstream `hydra-synth` publishes only the non-SPDX string `AGPL`. The changelog documents this module's migration in a `[2.0.0-dev.0]` section while retaining the upstream history for attribution. The README declares the dependency contract: zero production npm dependencies, one runtime dependency (the Noisemaker engine loaded from the rolling `https://shaders.noisedeck.app/1` CDN, with the `{ cdn: <basePath> }` / `{ engine }` pinning option and offline use unsupported), a browser WebGL2 runtime, and a Node >= 18 tooling floor (`esbuild` engines floor; suites exercised on Node 26.5.1). Fresh receipt: served engine core `31b766091125742665bee4c5c8392048eaaa786748cc9570b1c94460029fbded`, Last-Modified Sat, 26 Sep 2026 01:49:01 GMT, unchanged and still correlated with upstream `v1.0.185`; `npm pack` 31 files including the receipt, with a zero-difference extract-and-compare against the checkout; isolated install exit 0 with the six documented ESM exports resolving under Node 26.5.1; isolated `npm ci` plus `node --test test/installed-workflow.test.mjs` exit 0 (pack, install, both entry points in headless Chromium 154, reinstall, removal).
+- Observed behavior: All 28 packed files matched source at the 2026-09-24 audit; the current pack is 32 files with a zero-difference extract-and-compare against the checkout (receipt below). Four bundles reproduce. The candidate includes AGPLv3 text and no declared production npm dependencies. The packed HTML example now renders (GAP-004 closed, 2026-09-26).
+- Sweep status: the Linux host sweep runs 57/58 exact with the unchanged `rotate_animated_parameter` residual (96/16,384 bytes, max delta 1, identical to the retained receipt; the qualified macOS 58/58 record stands unchanged). This residual is a host animated-parameter precision delta; full-parity acceptance in GAP-001 remains open and no denominator reduction is claimed.
+- Distribution qualification, 2026-09-26: `package.json` now declares the exact SPDX identifier `AGPL-3.0-only` — `LICENSE` is the verbatim AGPLv3 text, no later-version election exists in the tree, and upstream `hydra-synth` publishes only the non-SPDX string `AGPL`. The changelog documents this module's migration in a `[2.0.0-dev.0]` section while retaining the upstream history for attribution. The README declares the dependency contract: zero production npm dependencies, one runtime dependency (the Noisemaker engine loaded from the rolling `https://shaders.noisedeck.app/1` CDN, with the `{ cdn: <basePath> }` / `{ engine }` pinning option and offline use unsupported), a browser WebGL2 runtime, and a Node >= 18 tooling floor (`esbuild` engines floor; suites exercised on Node 26.5.1). Fresh receipt: served engine core `31b766091125742665bee4c5c8392048eaaa786748cc9570b1c94460029fbded`, Last-Modified Sat, 26 Sep 2026 01:49:01 GMT, unchanged and still correlated with upstream `v1.0.185`; `npm pack` 32 files including both evidence receipts, with a zero-difference extract-and-compare against the checkout; isolated install exit 0 with the six documented ESM exports resolving under Node 26.5.1; isolated `npm ci` plus `node --test test/installed-workflow.test.mjs` exit 0 (pack, install, both entry points in headless Chromium 154, reinstall, removal).
 - Remaining limits: The engine loads from rolling CDN `/1` (pinning is declared but no immutable default). No published package, release, upgrade evidence exists (registry E404; upgrade remains same-candidate reinstall). The browser minimum version is not declared beyond the measured hosts.
 - Metadata limit: resolved — `AGPL` replaced by `AGPL-3.0-only`. The historical changelog entries are now labeled as retained upstream history; the migration is described by the `[2.0.0-dev.0]` section.
 - Evidence: [Distribution qualification, 2026-09-26](../workflow-evidence/gap-003/distribution-qualification.json), [Artifact verification](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/artifact-verification.json), [Build](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/build-reproduction.json), and [Registry](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/registry.json).
-- Next action: Resolve GAP-004 and supply GAP-005, then qualify upgrade against a published version and complete the applicable GAP-001 and GAP-002 acceptance checks before release.
-- Dependencies: Resolve GAP-004 and supply GAP-005. Complete the applicable GAP-001 and GAP-002 acceptance checks.
+- Next action: Supply GAP-005 through the existing CI system, then qualify upgrade against a published version and complete the applicable GAP-001 and GAP-002 acceptance checks before release.
+- Dependencies: GAP-004 resolved (closed 2026-09-26). Supply GAP-005. Complete the applicable GAP-001 and GAP-002 acceptance checks.
 - Acceptance criteria: Reproduce every shipped file and pass installed examples, declared hosts, error recovery, upgrade, and removal.
-- Required checks: Package contents, ESM/global entry points, SPDX metadata, immutable engine identity, and exact-source CI.
-- Last verification: 2026-09-24. This audit does not approve release.
+- Required checks: Package contents, ESM/global entry points, SPDX metadata, immutable engine identity, and exact-source CI. Of these, package contents, both entry points, SPDX metadata, and the engine-identity receipt are verified 2026-09-26; exact-source CI is absent (GAP-005) and upgrade evidence awaits a published version.
+- Last verification: 2026-09-26. GAP-004 is closed; GAP-003 remains open pending GAP-005 and upgrade evidence. This does not approve release.
 
 ### GAP-004: packed HTML invokes the removed renderer
 
-- Status: open. Priority: P2. Category: implementation.
+- Status: closed, 2026-09-26. Priority: P2. Category: implementation.
 - Affected scope: `dist/index.html` in the actual npm candidate.
 - Expected behavior: The supplied HTML example renders through the current public bundle API.
-- Observed behavior: The page calls `new Hydra()`. The bundle exposes `HydraEffects`, so Chrome reports `Hydra is not defined`.
-- Developer impact: Opening the supplied distribution example produces no canvas or useful output.
-- Evidence: [Installed page observation](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/distribution-and-recovery.json) and [HTML source](https://github.com/noisefactorllc/noisemaker-for-hydra-synth/blob/8e77ffccf410c05d9812daf5e7262bc5e55fc567/dist/index.html).
-- Next action: Correct the existing example through the implementation job. Use the documented `HydraEffects` API.
-- Dependencies: Use the declared engine version and supported WebGL backend.
+- Observed behavior: The page called `new Hydra()`. The bundle exposes `HydraEffects`, so Chrome reported `Hydra is not defined`.
+- Resolution, 2026-09-26: `dist/index.html` now uses `window.HydraEffects.loadHydraEffects()` with a caller-owned canvas, `engine.CanvasRenderer`, `loadManifest()`, the README `hydraOsc` program, and `renderer.start()`. Verified against the packed tarball served over HTTP in headless Chromium 154 (SwiftShader WebGL2): canvas present, zero `Uncaught`/`Hydra is not defined` errors, `example ready` logged, and three distinct 64×48 pixel samples across four probes (changing output). All four bundle hashes reproduced byte-for-byte; `node --test test/*.test.mjs` 46 pass, 0 fail, 0 skipped. [Evidence](../workflow-evidence/gap-004/packed-html-verification.json).
+- Developer impact: resolved — opening the supplied distribution example renders useful output.
+- Evidence: [Packed HTML verification, 2026-09-26](../workflow-evidence/gap-004/packed-html-verification.json), [Installed page observation](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/distribution-and-recovery.json), and [HTML source](https://github.com/noisefactorllc/noisemaker-for-hydra-synth/blob/8e77ffccf410c05d9812daf5e7262bc5e55fc567/dist/index.html).
+- Dependencies: Uses the declared engine version and the supported WebGL2 backend.
 - Acceptance criteria: Serve the packed HTML in Chrome. Require a canvas, changing output, and zero page errors.
 - Required checks: Packed-file browser execution and bundle reproduction.
-- Last verification: 2026-09-24. Failure reproduced in the isolated installed package.
+- Last verification: 2026-09-26. Acceptance criteria met at the containing commit; the gap is closed on that evidence.
 
 ### GAP-005: source updates have no rendered CI gate
 
@@ -188,7 +189,7 @@ Current first action: Repair the packed HTML in the implementation job, then ope
 Subsequent historical actions remain dependent on that evidence. No implementation is authorized by this audit.
 
 1. Resolve current Hydra `sum` and dependency provenance in GAP-001. Define the complete expected case inventory.
-2. Correct the packed HTML example in GAP-004. Require useful output from the installed artifact.
+2. Correct the packed HTML example in GAP-004. Require useful output from the installed artifact. (Resolved 2026-09-26: GAP-004 closed; see the gap record.)
 3. Complete GAP-001 parameter, input, state, size, and backend checks without denominator reductions.
 4. Complete GAP-002 host and lifecycle checks. Preserve unsupported platforms as explicit limits.
 5. Supply GAP-005 through existing CI. Bind results to the exact source and immutable authorities.
@@ -206,6 +207,7 @@ Implementation belongs to the separate job. This audit does not port effects or 
 | 2026-09-24, this audit | `8e77ffccf410c05d9812daf5e7262bc5e55fc567` | Updated both reports. Added GAP-004 and GAP-005. No closures. | 31 unit passes, 58 exact suite passes, four independent exact comparisons, installed lifecycle, and reproducible package. | Missing sum, WebGPU failure, broader coverage, broken HTML, platform limits, and absent CI. |
 | 2026-09-26, installed workflow run | Containing commit | Declared supported hosts and ownership rules; added the installed-workflow test, evidence receipt, and http-server startup fix. GAP-002 remains open. | 46 unit passes including 11 installed-ESM and 1 installed-bundle checks on Linux Chromium 154 headless: external image, diagnostics, recovery, cancellation, resize, 12 exact cycles, reinstall, removal. | Minimum versions, additional hosts, registry upgrade, offline use, and sustained resources remain unqualified. |
 | 2026-09-26, distribution qualification | Containing commit | Fixed SPDX metadata (`AGPL-3.0-only`), added the changelog 2.0.0-dev.0 migration entry, declared the dependency contract and minimum runtime in the README, added the engine-identity and pack receipts. GAP-003 remains open. | Build reproduced four bundle hashes byte-for-byte; 46 unit passes; 57/58 sweep with the unchanged host residual; 31-file pack with isolated install, ESM-export check, and installed-workflow test all exit 0; served engine identity unchanged since `v1.0.185`. | GAP-004, GAP-005, published upgrade, and release decision remain outstanding. [Evidence](../workflow-evidence/gap-003/distribution-qualification.json). |
+| 2026-09-26, packed HTML fix | Containing commit | Closed GAP-004: `dist/index.html` rewritten to the current `HydraEffects` API and verified against the packed tarball. | Served packed page in headless Chromium 154: canvas present, zero page errors, changing output (three distinct 64×48 samples across four probes); bundle reproduction byte-for-byte; 46 unit passes. | Verified on Linux Chromium 154 headless only; the pixel sampler was a scratch probe wrapper. [Evidence](../workflow-evidence/gap-004/packed-html-verification.json). |
 
 Initial run: `20260924-remaining-gap-documents`.
 [Initial raw evidence](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-20260924-remaining-gap-documents/hydra-synth-tests.json).

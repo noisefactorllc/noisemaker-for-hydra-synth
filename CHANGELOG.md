@@ -18,8 +18,7 @@ The candidate is a native port of Hydra's GLSL effects to the Noisemaker shader 
 - Package metadata now declares the exact SPDX identifier `AGPL-3.0-only`, matching the verbatim AGPLv3 `LICENSE` text (no later-version election exists in this repository). The package has no production npm dependencies; build and test tooling is dev-only (`esbuild`, `http-server`).
 
 ### Known limits
-- The packed `dist/index.html` example still calls the removed `Hydra` constructor and does not render (GAP-004).
-- Full rendered parity, published release, and upgrade qualification remain open (GAP-001, GAP-002, GAP-003, GAP-005).
+- Full rendered parity, published release, and upgrade qualification remain open (GAP-001, GAP-002, GAP-003, GAP-005). The packed `dist/index.html` example renders through the current `HydraEffects` API (GAP-004 closed 2026-09-26).
 
 ## [1.4] - 2025-09-24
 ### Fixed

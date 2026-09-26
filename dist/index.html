@@ -6,12 +6,24 @@
     <meta charset="utf-8">
   </head>
   <body class="w-100 h-100 mw-100 avenir bg-dark-gray near-white">
-  	 <div></div>
-       <script src='./hydra-synth.js'></script>
-       <script>
-        const h = new Hydra()
-        console.log('h', h)
-        osc(2).out()
-       </script>
+    <canvas id="hydra-canvas" width="320" height="240"></canvas>
+    <script src='./hydra-synth.js'></script>
+    <script type="module">
+      // The bundle exposes window.HydraEffects; the legacy `new Hydra()`
+      // constructor was removed from this port.
+      const engine = await window.HydraEffects.loadHydraEffects()
+      const canvas = document.getElementById('hydra-canvas')
+      const renderer = new engine.CanvasRenderer({
+        canvas,
+        basePath: window.HydraEffects.DEFAULT_CDN,
+        bundlePath: `${window.HydraEffects.DEFAULT_CDN}/effects`,
+        useBundles: true,
+        preferWebGPU: false
+      })
+      await renderer.loadManifest()
+      await renderer.compile('search hydra\nhydraOsc(frequency: 30, sync: 0.1, offset: 0.1).write(o0)')
+      renderer.start()
+      console.log('example ready')
+    </script>
   </body>
 </html>

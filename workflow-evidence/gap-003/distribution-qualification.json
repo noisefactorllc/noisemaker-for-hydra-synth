@@ -72,10 +72,10 @@
   "pack_contents": {
     "command": "npm pack --json",
     "version": "2.0.0-dev.0",
-    "files": 31,
-    "files_list_note": "31 packed files, including this receipt (workflow-evidence/gap-003/distribution-qualification.json). No archive links; all files are regular files.",
+    "files": 32,
+    "files_list_note": "32 packed files, including both evidence receipts (workflow-evidence/gap-003/distribution-qualification.json and workflow-evidence/gap-004/packed-html-verification.json; the count reflects the final containing commit after the GAP-004 fix added the second receipt). No archive links; all files are regular files.",
     "packed_package_json": { "license": "AGPL-3.0-only", "dependencies": {} },
-    "packed_file_match": "The packed tarball was extracted and all 31 packed files were byte-compared (`cmp`) against the checkout: 31 checked, 0 differences. A self-inclusive tarball digest is not recorded because the receipt is packed inside the archive."
+    "packed_file_match": "The packed tarball was extracted and all 32 packed files were byte-compared (`cmp`) against the checkout at the containing commit: 32 checked, 0 differences. A self-inclusive tarball digest is not recorded because the receipt is packed inside the archive."
   },
   "isolated_consumer": {
     "command": "npm install --ignore-scripts --bin-links=false --no-audit --no-fund <tarball>",
