@@ -1,0 +1,4 @@
+[ci-gate] unit suite: node --test test/*.test.mjs
+[ci-gate] unit suite: tests=52 pass=51 fail=1 skipped=0 (exit 1)
+[ci-gate] FAIL: unit suite fail=1 (must be 0)
+[ci-gate] FAILURES — gate rejected (unit-suite step)

@@ -17,7 +17,8 @@
   "scripts": {
     "dev": "http-server -p 8765",
     "build": "node scripts/build.mjs",
-    "test": "node --test test/*.test.mjs && node scripts/test.mjs"
+    "test": "node --test test/*.test.mjs && node scripts/test.mjs",
+    "gate": "node scripts/ci-gate.mjs"
   },
   "keywords": [
     "webgl",

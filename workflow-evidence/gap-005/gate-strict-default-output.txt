@@ -1,0 +1,8 @@
+[ci-gate] unit suite: node --test test/*.test.mjs
+[ci-gate] unit suite: tests=52 pass=52 fail=0 skipped=0 (exit 0)
+[ci-gate] starting http-server on port 36809
+[ci-gate] http-server verified serving on port 36809 (page bytes match the checkout)
+[ci-gate] pixel-parity: GET /dev-noisemaker/pixel-parity.html
+[ci-gate] pixel-parity: 57/58 pass, 1 fail (58 per-case lines counted)
+[ci-gate] FAIL: mismatches must fail qualification; got 1 failures (no residual opt-in exists — the sweep must be fully exact, or the residual policy must be explicitly ratified by the actor with workflow authority): rotate_animated_parameter  →  96/16384 bytes differ; max delta 1; samples [{"at":[0,0],"actual":[232,0,0,255],"expected":[232,0,0,255]},{"at":[63,0],"actual":[255,232,0,255],"expected":[255,232,0,255]},{"at":[0,63],"actual":[0,23,0,255],"expected":[0,23,0,255]},{"at":[63,63],"actual":[23,255,0,255],"expected":[23,255,0,255]}]
+[ci-gate] FAILURES — gate rejected

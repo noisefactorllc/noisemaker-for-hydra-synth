@@ -1,0 +1,9 @@
+[ci-gate] unit suite: node --test test/*.test.mjs
+[ci-gate] unit suite: tests=52 pass=52 fail=0 skipped=0 (exit 0)
+[ci-gate] bootstrapping the upstream remote (bare checkout)
+[ci-gate] error: Error: cannot fetch the retained upstream Hydra bundle from https://github.com/ojack/hydra-synth.git: git fetch --depth=1 upstream main failed (status=128, stderr=fatal: unable to access 'http://127.0.0.1:1/x.git/': Failed to connect to 127.0.0.1 port 1 after 0 ms: Couldn't connect to server). Network access to github.com is required; the gate fails rather than sweeping against missing authority.
+    at main (file:///workspace/repos/noisemaker-for-hydra-synth/scripts/ci-gate.mjs:275:13)
+    at file:///workspace/repos/noisemaker-for-hydra-synth/scripts/ci-gate.mjs:338:3
+    at ModuleJob.run (node:internal/modules/esm/module_job:569:25)
+    at async node:internal/modules/esm/loader:650:26
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5)

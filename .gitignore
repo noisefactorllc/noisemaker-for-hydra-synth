@@ -68,3 +68,7 @@ typings/
 
 # pnpm lock file
 pnpm-lock.yaml
+
+# Scratch bundle materialized by scripts/ci-gate.mjs (removed on every
+# handled exit path; ignored so an unhandled SIGKILL cannot pollute the tree)
+dev-noisemaker/.legacy-hydra-synth.js
