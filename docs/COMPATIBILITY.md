@@ -64,9 +64,11 @@ The matrix below retains the earlier measured scope. A historical verified row i
 | Stop, disposal, and removal | verified | Public calls complete. npm removal succeeds. Sustained GPU resource behavior remains unmeasured. |
 | Packed dist/index.html | failed | Removed Hydra constructor causes ReferenceError. The page creates no canvas. |
 | Bundle reproduction | verified | Four JavaScript bundles match tracked bytes after an isolated build. |
-| External media, seed coverage, long stateful chains | unverified | Existing surfaces and short feedback checks do not qualify these broader workflows. |
-| Minimum browsers, Safari, Firefox, Windows, Linux | unverified | No measured version or platform matrix. |
-| Upgrades, offline use, cancellation, sustained lifecycle | unverified | No complete installed qualification. |
+| Installed API through both entry points, Linux Chromium 154 headless | verified | 11 ESM-page checks and 1 bundle-page check, 0 failures: README result, frequency change, external image, S001 diagnostics, recovery, stop/start cancellation, caller-canvas resize, 12 exact create/render/dispose cycles, reinstall, removal. [Evidence](../workflow-evidence/gap-002/installed-workflow.json). |
+| External image input through the installed API | verified | `synth/media` + `updateTextureFromSource('imageTex_step_0', …)` renders a served 16×16 PNG's red/blue halves at the expected coordinates on Linux Chromium 154 headless. |
+| Seed coverage, long stateful chains | unverified | The installed run uses time 0 and short programs. |
+| Minimum browsers, Safari, Firefox, Windows, GPU-hardware Linux | unverified | Linux is measured only as Chromium 154 headless on SwiftShader WebGL2. No minimum version is declared. |
+| Registry upgrade, offline use, sustained lifecycle | unverified | Same-candidate reinstall verified; offline use is declared unsupported (engine loads from the CDN); sustained resource growth unmeasured. |
 | Package metadata and notices | unverified | AGPLv3 text exists. AGPL metadata lacks an exact SPDX identifier. Rolling CDN dependency needs a contract. |
 | Source-update CI | blocked | Zero workflows and exact-source runs. No rendered gate exists. |
 | Release readiness | blocked | Complete parity, artifact examples, host coverage, and CI remain unresolved. |
@@ -124,6 +126,8 @@ The current distribution HTML independently produces `Hydra is not defined` and 
 | Installed HTML, sum, and WebGPU probes | Explicit failures | [Raw diagnostics](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/distribution-and-recovery.json) |
 | `npm run build` in installed candidate | 0, four matching bundles | [Reproduction](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/build-reproduction.json) |
 | `npm uninstall --ignore-scripts --bin-links=false --no-audit --no-fund noisemaker-for-hydra-synth` | 0, package absent | [Removal log](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/removal.json) |
+| `node --test test/installed-workflow.test.mjs` | 0, pack + isolated install + 11 + 1 installed checks + reinstall + removal + file preservation | [Installed workflow evidence](../workflow-evidence/gap-002/installed-workflow.json) |
+| `CHROME=/usr/bin/chromium PORT=8765 node scripts/test.mjs` | 57 exact, 1 known host residual (96/16,384, max delta 1, matches the retained 9e7520b receipt) | [Installed workflow evidence](../workflow-evidence/gap-002/installed-workflow.json) |
 | `gh api repos/noisefactorllc/noisemaker-for-hydra-synth/actions/workflows` | 0, zero workflows | [GitHub preflight](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/preflight.json) |
 | `npm view noisemaker-for-hydra-synth version dist --json` | 1, E404 | [Registry response](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/registry.json) |
 
@@ -161,6 +165,7 @@ The implementation job owns corrections. This audit does not advance the parity 
 |---|---|---|---|
 | 2026-09-24, initial report | `be5d53bc928b9ed641332db48d849354d0d5d0bb` | 30 Node tests. Full qualification unverified. | Created the report with no browser sweep or installed qualification. |
 | 2026-09-24, audit | `8e77ffccf410c05d9812daf5e7262bc5e55fc567` | 31 unit passes, 58 exact suite cases, four independent exact probes. Full parity remains unqualified. | Added installed evidence, immutable references, source reconciliation, sum and WebGPU limits, broken HTML, and absent CI. |
+| 2026-09-26, installed workflow run | Containing commit | 46 unit passes including the new installed-workflow test; 11 + 1 installed checks, 0 failures, on Linux Chromium 154 headless; 57/58 sweep with the known host residual. | Declared supported hosts and ownership rules; added external-image, cancellation, reinstall, removal, repeated-lifecycle, and file-preservation evidence. Registry upgrade, minimum versions, additional hosts, and sustained resources remain unqualified. |
 
 Initial run: `20260924-remaining-gap-documents`. [Retained initial report](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/before-COMPATIBILITY.md).
 Current run: `audit-20260924-170142`. [Current operational evidence](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/).

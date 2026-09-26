@@ -20,9 +20,12 @@ const SWEEPS = [
 ]
 
 function startServer() {
-  const proc = spawn('npx', ['--yes', 'http-server', '-p', String(PORT), '-s'], {
-    stdio: ['ignore', 'pipe', 'pipe']
-  })
+  // Installs use --bin-links=false, so no http-server binary exists; run it
+  // through node directly from the installed dependency.
+  const proc = spawn(process.execPath,
+    [join(process.cwd(), 'node_modules', 'http-server', 'bin', 'http-server'),
+      '-p', String(PORT), '-s'],
+    { stdio: ['ignore', 'pipe', 'pipe'] })
   return proc
 }
 

@@ -39,6 +39,16 @@ renderer.start()
 
 `osc` is exposed as `hydraOsc` because Noisemaker reserves `osc` for animated parameters.
 
+## Supported hosts and ownership
+
+Supported hosts are browsers with a WebGL2 implementation and network access to the engine CDN (`https://shaders.noisedeck.app/1`); the engine loads at runtime, so offline use is not supported. Measured hosts: Chromium 154.0.8037.57 headless (SwiftShader WebGL2, Debian 12 Linux) and Chrome 153.0.8010.53 (Apple M4, macOS 26.5). WebGPU is not supported; do not set `preferWebGPU: true`.
+
+Resource ownership:
+
+- The caller owns the canvas element. The renderer never resizes the caller's canvas: set `canvas.width`/`canvas.height` yourself and call `renderer.resize(width, height)` so the pipeline matches.
+- Textures uploaded through `renderer.updateTextureFromSource(textureId, source)` (for example the `synth/media` effect's `imageTex_step_<index>` binding) are managed by the renderer and released when `renderer.dispose()` is called.
+- `renderer.stop()` cancels the render loop; `renderer.start()` resumes it. `renderer.dispose()` releases the pipeline's surfaces and GPU resources.
+
 ## Browser bundle
 
 ```html

@@ -92,6 +92,20 @@ Npm documents SPDX license identifiers and package entry points. The candidate i
 No editor controls belong to this module. Keyboard and focus tests do not apply to its API.
 The broken bundled HTML remains a distribution finding. Desktop signing and notarization do not apply to this browser module.
 
+### Installed workflow run, 2026-09-26
+
+The packed candidate (`2.0.0-dev.0`, 29 files) was installed into an isolated Linux consumer with `--ignore-scripts --bin-links=false` and exercised through both entry points in headless Chromium 154.0.8037.57 (SwiftShader WebGL2, Debian 12, Node 26.5.1). Raw commands, identities, denominators, and exit codes: [installed workflow evidence](../workflow-evidence/gap-002/installed-workflow.json).
+
+| Command or public workflow | Exit or result | Evidence |
+|---|---|---|
+| `node --test test/*.test.mjs` | 0. 46 pass, 0 fail, 0 skip. | [Installed workflow evidence](../workflow-evidence/gap-002/installed-workflow.json) |
+| Installed ESM and bundle pages | 11 + 1 checks, 0 failures: README result, frequency change, external image, S001 diagnostics, recovery, cancellation, resize, 12 exact lifecycle cycles, dispose | Same evidence file |
+| External image through `synth/media` | Upload reported 16×16; rendered frame sampled red and blue at the expected coordinates | Same evidence file |
+| Reinstall and removal | Both exit 0; package intact after reinstall, absent after uninstall | Same evidence file |
+| `CHROME=/usr/bin/chromium PORT=8765 node scripts/test.mjs` | 57 exact, 1 known host residual (`rotate_animated_parameter`, 96/16,384 bytes, max delta 1, identical to the retained 9e7520b receipt) | Same evidence file |
+
+The upgrade check is a same-candidate reinstall; no published registry version exists to upgrade from. Offline use is declared unsupported, not measured.
+
 ## 4. Known gaps
 
 P1 means false completion or major correctness failure. P2 means coverage or integration uncertainty. P3 means documentation inconsistency.
@@ -116,14 +130,14 @@ No gap closed during this audit.
 - Status: open. Priority: P2. Category: usability.
 - Affected scope: Public API, host versions, external inputs, errors, recovery, and lifecycle.
 - Expected behavior: Developers can install, produce output, integrate, recover, upgrade, and remove the package under declared requirements.
-- Observed behavior: Installed README output, frequency changes, mixed invert, structured diagnostics, recovery, resize, disposal calls, and removal pass locally.
-- Remaining limits: Minimum versions, Windows, Linux, Safari, Firefox, real media, upgrades, cancellation, offline use, and sustained resource behavior remain unverified.
-- Evidence: [Installed workflow](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/installed-browser.json), [Resize](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/independent-differential.json), and [Removal](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/removal.json).
-- Next action: Declare supported hosts. Exercise one external-image workflow and repeated create/render/dispose cycles through the installed API.
-- Dependencies: Use the same immutable artifacts as GAP-001. Identify ownership rules for caller canvases and input textures.
+- Observed behavior: Installed README output, frequency changes, mixed invert, structured diagnostics, recovery, resize, disposal calls, and removal pass locally. On 2026-09-26 the packed candidate was installed into an isolated Linux consumer and exercised through both entry points in headless Chromium 154: README first result, parameter differences, external image input through `synth/media` and `updateTextureFromSource`, S001 diagnostics with recovery, stop/start cancellation, caller-canvas resize, 12 exact create/render/dispose cycles, same-candidate reinstall, and removal. Supported hosts and resource-ownership rules are now declared in the README.
+- Remaining limits: Minimum versions, Windows, macOS GPU hardware, Safari, Firefox, registry upgrade (only same-candidate reinstall is measured; npm view returns E404), offline use (declared unsupported because the engine loads from the CDN), and sustained resource behavior remain unverified.
+- Evidence: [Installed workflow, 2026-09-26](../workflow-evidence/gap-002/installed-workflow.json), [Installed workflow](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/installed-browser.json), [Resize](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/independent-differential.json), and [Removal](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/removal.json).
+- Next action: Run the installed workflow on additional declared hosts (Firefox, Safari, Windows, GPU-hardware Linux) and repeat it against a registry-published upgrade once a published version exists.
+- Dependencies: Use the same immutable artifacts as GAP-001. Ownership rules for caller canvases and input textures are documented in the README.
 - Acceptance criteria: Retain meaningful pixels, diagnostics, recovery, stable resources, and file-preservation evidence across the declared matrix.
-- Required checks: Minimum/current host runs, image input, cancellation, upgrade, removal, and repeated lifecycle checks.
-- Last verification: 2026-09-24. Local browser evidence narrows this gap but does not close it.
+- Required checks: Minimum/current host runs, image input, cancellation, upgrade, removal, and repeated lifecycle checks. Image input, cancellation, removal, and repeated lifecycle checks executed on Linux Chromium 154 headless; minimum-version and additional-host runs remain outstanding.
+- Last verification: 2026-09-26. Linux headless evidence narrows this gap but does not close it.
 
 ### GAP-003: distribution and release qualification
 
@@ -189,6 +203,7 @@ Implementation belongs to the separate job. This audit does not port effects or 
 |---|---|---|---|---|
 | 2026-09-24, initial register | `be5d53bc928b9ed641332db48d849354d0d5d0bb` | Created six-section register and README link. No closures. | 30 Node tests passed. Browser sweep was not executed. | Full audit, installed workflows, parity, platforms, and releases remained unqualified. |
 | 2026-09-24, this audit | `8e77ffccf410c05d9812daf5e7262bc5e55fc567` | Updated both reports. Added GAP-004 and GAP-005. No closures. | 31 unit passes, 58 exact suite passes, four independent exact comparisons, installed lifecycle, and reproducible package. | Missing sum, WebGPU failure, broader coverage, broken HTML, platform limits, and absent CI. |
+| 2026-09-26, installed workflow run | Containing commit | Declared supported hosts and ownership rules; added the installed-workflow test, evidence receipt, and http-server startup fix. GAP-002 remains open. | 46 unit passes including 11 installed-ESM and 1 installed-bundle checks on Linux Chromium 154 headless: external image, diagnostics, recovery, cancellation, resize, 12 exact cycles, reinstall, removal. | Minimum versions, additional hosts, registry upgrade, offline use, and sustained resources remain unqualified. |
 
 Initial run: `20260924-remaining-gap-documents`.
 [Initial raw evidence](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-20260924-remaining-gap-documents/hydra-synth-tests.json).

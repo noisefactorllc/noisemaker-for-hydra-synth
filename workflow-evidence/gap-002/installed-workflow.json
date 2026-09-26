@@ -1,0 +1,93 @@
+{
+  "run": "gap-002-installed-developer-workflow",
+  "date": "2026-09-26",
+  "source_identity": "The containing commit identifies the tested tree. Local HEAD matched origin/main before the run; every tracked file kept its pre-run SHA-256 at the end of the run (hash-set comparison, zero differences).",
+  "environment": {
+    "os": "Debian GNU/Linux 12 (bookworm), x86_64 container",
+    "node": "26.5.1",
+    "npm": "11.17.0",
+    "browser": "Chromium 154.0.8037.57 (headless, WebGL2 via SwiftShader)",
+    "chromium_path": "/usr/bin/chromium"
+  },
+  "engine_identity": {
+    "cdn": "https://shaders.noisedeck.app/1",
+    "core_bundle": "noisemaker-shaders-core.esm.min.js",
+    "core_sha256": "31b766091125742665bee4c5c8392048eaaa786748cc9570b1c94460029fbded",
+    "core_last_modified": "Sat, 26 Sep 2026 01:49:01 GMT",
+    "manifest_effect_ids": 210
+  },
+  "commands": [
+    {
+      "command": "npm ci --ignore-scripts --bin-links=false --no-audit --no-fund",
+      "exit": 0,
+      "result": "46 packages installed; no bin links (symlink-free tree preserved)"
+    },
+    {
+      "command": "npm run build",
+      "exit": 0,
+      "result": "Isolated build reproduced all four tracked bundles byte-for-byte",
+      "bundle_sha256": {
+        "dist/hydra-synth.js": "08c5f3de924b44e9cec7d30b4fdb82cac62558c34fc37ffc820c30b772493aa7",
+        "dist/hydra-synth.esm.js": "847f674ae6265ae1ae41481dbb30d296e983583f3b7aa2f6e9feb205876743bd",
+        "dist/hydra-synth.esm.min.js": "0d3f680e3bcfafdbf03bbbd198a3f419463283dcba5daf8621649a7d2f889fc4",
+        "dist/hydra-synth.min.js": "e545d9fe58bf3984668b291988051c948c3fcd487baf680d5b0b3b5b37b4f4c7"
+      }
+    },
+    {
+      "command": "node --test test/*.test.mjs",
+      "exit": 0,
+      "result": "46 pass, 0 fail, 0 skipped (45 existing plus the new installed-workflow test)"
+    },
+    {
+      "command": "node --test test/installed-workflow.test.mjs",
+      "exit": 0,
+      "result": "1 pass. Packs the candidate, installs the tarball into an isolated consumer with --ignore-scripts --bin-links=false, exercises both installed entry points in headless Chromium, reinstalls, removes, and verifies tracked-file preservation.",
+      "packed_candidate": {
+        "version": "2.0.0-dev.0",
+        "file_count": 29
+      },
+      "installed_esm_page_checks": {
+        "total": 11,
+        "fail": 0,
+        "cases": [
+          "readme_first_result",
+          "frequency_change_differences",
+          "external_image_input",
+          "structured_diagnostics",
+          "recovery_after_invalid_input",
+          "start_schedules_frames",
+          "stop_cancels_frames",
+          "start_resumes_frames",
+          "resize_caller_canvas",
+          "repeated_lifecycle_exact_cycles",
+          "repeated_lifecycle_dispose"
+        ]
+      },
+      "installed_bundle_page_checks": {
+        "total": 1,
+        "fail": 0,
+        "cases": ["bundle_global_readme_result"]
+      },
+      "external_image_input_detail": "Locally served 16x16 RGBA PNG (left half red, right half blue) uploaded through renderer.updateTextureFromSource('imageTex_step_0', img, {flipY:false}) after compiling search synth\\nmedia().write(o0); upload reported 16x16 and the rendered frame sampled red at (8,24) and blue at (56,24) of the 64x48 canvas.",
+      "repeated_lifecycle_detail": "12 create/loadManifest/compile/render/dispose cycles on fresh 64x48 canvases; cycle 1 established the baseline and cycles 2-12 reproduced it with zero differing RGBA channels; every dispose({loseContext:true}) resolved without error.",
+      "cancellation_detail": "Frame scheduling observed through a requestAnimationFrame counter because virtual time makes pixel-delta probes unreliable in headless capture: running start() scheduled frames, stop() scheduled none over an 80 ms window, a second start() resumed scheduling.",
+      "reinstall": "npm install of the same tarball over the existing consumer installation exited 0 and left the installed package intact. No published registry version exists to upgrade from (npm view exits 1, E404), so this measures reinstall, not a version upgrade.",
+      "removal": "npm uninstall --ignore-scripts --bin-links=false --no-audit --no-fund noisemaker-for-hydra-synth exited 0 and node_modules/noisemaker-for-hydra-synth was absent afterwards.",
+      "file_preservation": "SHA-256 set over git ls-files taken before and after the run compared equal; no tracked file changed."
+    },
+    {
+      "command": "CHROME=/usr/bin/chromium PORT=8765 node scripts/test.mjs",
+      "exit": 1,
+      "result": "57 exact comparisons pass, 1 fails: rotate_animated_parameter, 96/16,384 bytes differ, max delta 1. This reproduces the retained Linux receipt at 9e7520bcd9457a243349736faeebda77a7f0bd4d exactly and is attributed there to animated-parameter evaluation precision on this host's GL implementation; the qualified macOS 58/58 record stands unchanged. No new mismatch appeared in this run."
+    }
+  ],
+  "infrastructure_fix": "scripts/test.mjs previously started http-server through `npx --yes http-server`, which fails under --bin-links=false installs because no binary link exists. startServer() now spawns node node_modules/http-server/bin/http-server through process.execPath. This changes server startup only; the sweep URL, cases, and pass criteria are unchanged.",
+  "declared_hosts": "README 'Supported hosts and ownership' now declares: browsers with a WebGL2 implementation plus network access to the engine CDN; offline use unsupported; WebGPU unsupported (do not set preferWebGPU). Measured hosts: Chromium 154.0.8037.57 headless SwiftShader on Debian 12 Linux (this run) and Chrome 153.0.8010.53, Apple M4, macOS 26.5 (retained 2026-09-24 record).",
+  "ownership_rules": "README now documents: the caller owns the canvas element and must set its dimensions before calling renderer.resize; textures uploaded through renderer.updateTextureFromSource are managed by the renderer and released by dispose(); stop() cancels and start() resumes the render loop; dispose() releases pipeline surfaces and GPU resources.",
+  "remaining_limits": [
+    "No minimum host versions are declared; no Firefox, Safari, Windows, macOS, or GPU-hardware Linux run exists for the installed workflow.",
+    "Upgrade is measured as same-candidate reinstall only; no published prior version exists.",
+    "Sustained long-run resource growth remains unmeasured; the repeated-lifecycle check covers 12 discrete cycles with explicit disposal.",
+    "Offline use is declared unsupported (engine loads from the CDN at runtime) rather than measured."
+  ]
+}
