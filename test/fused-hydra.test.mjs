@@ -1728,6 +1728,266 @@ test('compileWithHydraParity propagates structured parser subchain argument vali
   )
 })
 
+test('compileWithHydraParity propagates effect definition validation errors attached to Error (GAP-003)', async () => {
+  class CanvasRenderer {
+    async compile() {
+      return {}
+    }
+  }
+
+  const errValidationGAP003 = new Error("Invalid effect definition")
+  errValidationGAP003.errors = [
+    "Effect 'bad': globals.size: 'min' must be a number",
+    "Effect 'bad': passes[0]: 'program' must be a non-empty string"
+  ]
+
+  const engine = {
+    CanvasRenderer,
+    compile() {
+      throw errValidationGAP003
+    }
+  }
+
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+
+  await assert.rejects(
+    async () => renderer.compile('search hydra\nbadEffect()'),
+    (error) => {
+      assert.equal(error, errValidationGAP003)
+      assert.equal(error.message, "Invalid effect definition")
+      assert.deepEqual(error.errors, [
+        "Effect 'bad': globals.size: 'min' must be a number",
+        "Effect 'bad': passes[0]: 'program' must be a non-empty string"
+      ])
+      return true
+    }
+  )
+})
+
+test('compileWithHydraParity propagates texture policy validation errors attached to Error (GAP-004)', async () => {
+  class CanvasRenderer {
+    async compile() {
+      return {}
+    }
+  }
+
+  const errTexturePolicyGAP004 = new Error("Invalid texture specification")
+  errTexturePolicyGAP004.errors = [
+    "Texture 'noiseTex': \"filter\" is only supported on 3D texture specs (\"textures3d\")",
+    "Texture 'mipTex': \"mipmaps\" must be a boolean",
+    "Texture 'persistTex': \"persistent\" must be a boolean"
+  ]
+
+  const engine = {
+    CanvasRenderer,
+    compile() {
+      throw errTexturePolicyGAP004
+    }
+  }
+
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+
+  await assert.rejects(
+    async () => renderer.compile('search hydra\nnoise().write(o0)'),
+    (error) => {
+      assert.equal(error, errTexturePolicyGAP004)
+      assert.equal(error.message, "Invalid texture specification")
+      assert.deepEqual(error.errors, [
+        "Texture 'noiseTex': \"filter\" is only supported on 3D texture specs (\"textures3d\")",
+        "Texture 'mipTex': \"mipmaps\" must be a boolean",
+        "Texture 'persistTex': \"persistent\" must be a boolean"
+      ])
+      return true
+    }
+  )
+})
+
+test('compileWithHydraParity propagates pass property validation errors attached to Error (GAP-005)', async () => {
+  class CanvasRenderer {
+    async compile() {
+      return {}
+    }
+  }
+
+  const errPassPolicyGAP005 = new Error("Invalid pass specification")
+  errPassPolicyGAP005.errors = [
+    "Pass 0 property 'viewport' must be an object with numeric x, y, width, height",
+    "Pass 0 property 'samplerTypes' must be an object mapping sampler names to sampler type strings",
+    "Pass 0 property 'clear' must be a boolean"
+  ]
+
+  const engine = {
+    CanvasRenderer,
+    compile() {
+      throw errPassPolicyGAP005
+    }
+  }
+
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+
+  await assert.rejects(
+    async () => renderer.compile('search hydra\nnoise().write(o0)'),
+    (error) => {
+      assert.equal(error, errPassPolicyGAP005)
+      assert.equal(error.message, "Invalid pass specification")
+      assert.deepEqual(error.errors, [
+        "Pass 0 property 'viewport' must be an object with numeric x, y, width, height",
+        "Pass 0 property 'samplerTypes' must be an object mapping sampler names to sampler type strings",
+        "Pass 0 property 'clear' must be a boolean"
+      ])
+      return true
+    }
+  )
+})
+
+test('compileWithHydraParity preserves texture policy and pass property contracts across recompilation (GAP-004, GAP-005)', async () => {
+  const textures = new Map()
+
+  class MockPipeline {
+    constructor() {
+      this.graph = {
+        textures: new Map([
+          ['global_o0', { width: 'screen', height: 'screen', format: 'rgba32f', mipmaps: true, persistent: true }]
+        ]),
+        passes: [
+          {
+            name: 'render_hydra',
+            program: 'gradient',
+            type: 'render',
+            clear: true,
+            viewport: { x: 0, y: 0, width: 640, height: 360 },
+            samplerTypes: { noiseTex: 'sampler3D' },
+            nodeId: 'node_0'
+          }
+        ]
+      }
+      this.backend = {
+        textures,
+        createTexture(name, spec) { textures.set(name, spec) },
+        destroyTexture(name) { textures.delete(name) }
+      }
+      this.surfaces = new Map()
+    }
+    createSurfaces() {
+      for (const [name, spec] of this.graph.textures) {
+        this.backend.createTexture(`${name}_read`, spec)
+        this.backend.createTexture(`${name}_write`, spec)
+      }
+    }
+    shouldDeferRender() { return false }
+  }
+
+  class CanvasRenderer {
+    constructor() {
+      this.pipeline = new MockPipeline()
+      this._deferredFrameCount = 0
+    }
+    async compile() {
+      this.pipeline.createSurfaces()
+      return this.pipeline
+    }
+    get deferredFrameCount() { return this._deferredFrameCount }
+  }
+
+  const engine = {
+    CanvasRenderer,
+    compile() {
+      return compiledPlan([{
+        op: 'hydra.gradient',
+        args: { speed: 1 },
+        from: null,
+        temp: 0
+      }], 'o0')
+    }
+  }
+
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+  const compiled = await renderer.compile('search hydra\ngradient(1).write(o0)')
+
+  const spec = compiled.graph.textures.get('global_o0')
+  assert.equal(spec.mipmaps, true)
+  assert.equal(spec.persistent, true)
+
+  const pass = compiled.graph.passes[0]
+  assert.equal(pass.name, 'render_hydra')
+  assert.equal(pass.type, 'render')
+  assert.equal(pass.clear, true)
+  assert.deepEqual(pass.viewport, { x: 0, y: 0, width: 640, height: 360 })
+  assert.deepEqual(pass.samplerTypes, { noiseTex: 'sampler3D' })
+})
+
+test('compileWithHydraParity preserves texture policies across WebGPU format retention', async () => {
+  const textures = new Map([
+    ['global_o0_read', { format: 'rgba16float' }],
+    ['global_o0_write', { format: 'rgba16float' }]
+  ])
+
+  class WebGPUMockPipeline {
+    constructor() {
+      this.graph = {
+        textures: new Map([
+          ['global_o0', { width: 'screen', height: 'screen', format: 'rgba32f', mipmaps: false, persistent: true }]
+        ]),
+        passes: []
+      }
+      this.backend = {
+        getName() { return 'WebGPU' },
+        textures,
+        createTexture(name, spec) { textures.set(name, spec) },
+        destroyTexture(name) { textures.delete(name) },
+        copyTexture() {}
+      }
+      this.surfaces = new Map([
+        ['o0', { read: 'global_o0_read', write: 'global_o0_write' }]
+      ])
+    }
+    createSurfaces() {}
+    shouldDeferRender() { return false }
+  }
+
+  class CanvasRenderer {
+    constructor() {
+      this.pipeline = new WebGPUMockPipeline()
+    }
+    async compile() {
+      return this.pipeline
+    }
+  }
+
+  const engine = {
+    CanvasRenderer,
+    compile() {
+      return compiledPlan([
+        {
+          op: 'hydra.src',
+          args: { tex: { kind: 'output', name: 'o0' } },
+          from: null,
+          temp: 0
+        },
+        {
+          op: 'hydra.gradient',
+          args: { speed: 1 },
+          from: 0,
+          temp: 1
+        }
+      ], 'o0')
+    }
+  }
+
+  installHydraCompiler(engine)
+  const renderer = new engine.CanvasRenderer()
+  const compiled = await renderer.compile('search hydra\nsrc(o0).gradient(1).write(o0)')
+
+  const spec = compiled.graph.textures.get('global_o0')
+  assert.equal(spec.format, 'rgba16float', 'WebGPU actual surface format should be retained')
+  assert.equal(spec.mipmaps, false, 'explicit mipmaps: false should be preserved')
+  assert.equal(spec.persistent, true, 'explicit persistent: true should be preserved')
+})
+
 test('formats boolean and numeric edge cases into valid GLSL in fused shaders', () => {
   const check = (speed) => {
     const compiled = compiledPlan([{

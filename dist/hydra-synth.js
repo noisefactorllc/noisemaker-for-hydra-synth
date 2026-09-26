@@ -1717,8 +1717,15 @@ void main() {
     const current = /* @__PURE__ */ new Map();
     const touched = /* @__PURE__ */ new Set([...previous.keys(), ...promoted]);
     for (const surface of promoted) {
-      pipeline.graph.textures.set(`global_${surface}`, HYDRA_SURFACE_SPEC);
-      current.set(surface, HYDRA_SURFACE_SPEC);
+      const existing = pipeline.graph.textures.get(`global_${surface}`);
+      const hasPolicy = existing?.mipmaps !== void 0 || existing?.persistent !== void 0;
+      const spec = hasPolicy ? {
+        ...HYDRA_SURFACE_SPEC,
+        ...existing.mipmaps !== void 0 ? { mipmaps: existing.mipmaps } : {},
+        ...existing.persistent !== void 0 ? { persistent: existing.persistent } : {}
+      } : HYDRA_SURFACE_SPEC;
+      pipeline.graph.textures.set(`global_${surface}`, spec);
+      current.set(surface, spec);
     }
     for (const surface of retain) {
       if (current.has(surface) || !previous.has(surface)) continue;
@@ -1742,7 +1749,8 @@ void main() {
       const actual = pipeline.backend.textures.get(state.read)?.format;
       if (actual === desired) continue;
       if (preserve.has(surface) && pipeline.backend.getName?.() === "WebGPU") {
-        const retained = { ...HYDRA_SURFACE_SPEC, format: actual };
+        const base = current.get(surface) || HYDRA_SURFACE_SPEC;
+        const retained = { ...base, format: actual };
         pipeline.graph.textures.set(key, retained);
         current.set(surface, retained);
         continue;
@@ -1831,15 +1839,22 @@ void main() {
       const existingPipeline = this.pipeline;
       const isWebGPU = existingPipeline?.backend?.getName?.() === "WebGPU";
       for (const surface of promoted) {
+        const existingSpec = existingPipeline?.graph?.textures?.get?.(`global_${surface}`);
+        const hasPolicy = existingSpec?.mipmaps !== void 0 || existingSpec?.persistent !== void 0;
+        const baseSpec = hasPolicy ? {
+          ...HYDRA_SURFACE_SPEC,
+          ...existingSpec.mipmaps !== void 0 ? { mipmaps: existingSpec.mipmaps } : {},
+          ...existingSpec.persistent !== void 0 ? { persistent: existingSpec.persistent } : {}
+        } : HYDRA_SURFACE_SPEC;
         if (isWebGPU && preserve.has(surface)) {
           const state = existingPipeline?.surfaces?.get(surface);
           const actual = state && existingPipeline?.backend?.textures?.get(state.read)?.format;
-          if (actual && actual !== HYDRA_SURFACE_SPEC.format) {
-            current.set(surface, { ...HYDRA_SURFACE_SPEC, format: actual });
+          if (actual && actual !== baseSpec.format) {
+            current.set(surface, { ...baseSpec, format: actual });
             continue;
           }
         }
-        current.set(surface, HYDRA_SURFACE_SPEC);
+        current.set(surface, baseSpec);
       }
       for (const surface of retain) {
         if (current.has(surface) || !previous.has(surface)) continue;

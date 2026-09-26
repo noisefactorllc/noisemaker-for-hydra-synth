@@ -63,6 +63,9 @@ test('registers the hydra namespace before native effects', () => {
     definition.textures?.out?.format === 'rgba32f'
   )))
   assert.ok(effects.every(([, , definition]) => (
+    definition.passes.every(pass => pass.name === 'render' && pass.type === 'render' && typeof pass.program === 'string')
+  )))
+  assert.ok(effects.every(([, , definition]) => (
     definition.passes[0].outputs.fragColor === 'outputTex'
   )))
   assert.ok(engine.calls.some(([kind, key, spec]) => (
