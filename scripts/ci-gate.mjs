@@ -75,11 +75,12 @@ const LEGACY_BUNDLE_SHA256 = 'b4881aa9dfbd990a9e37fe6766581816fc273cdd42471e13bf
 // workflow authority (the qualified macOS host record for the legacy
 // 58-case suite is 58/58 exact). The GAP-001 complete expected-case
 // inventory remains open and is not claimed by this runner.
-// The page now emits 62 cases: `sum` was never a generated legacy case (the
-// authority bundle's sum shader cannot compile) and stays excluded there; the
-// two ADDED cases are the `sum_reference` formula comparison and
-// `parameter_matrix`. Denominator is 60.
-const TOTAL_CASES = 62
+// The page now emits 63 cases: `sum` was never a generated legacy case (the
+// authority bundle's sum shader cannot compile) and stays excluded there;
+// `sum_reference`, `sum_default_scale`, the two parameter-matrix cases and
+// `rotate_animated_uniform_parameter` were added on top of the original
+// generated fixtures. Denominator is 63.
+const TOTAL_CASES = 63
 
 function startServer(port) {
   // Installs use --bin-links=false, so no http-server binary exists; run it

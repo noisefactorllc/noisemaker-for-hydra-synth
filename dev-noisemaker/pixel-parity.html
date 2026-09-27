@@ -96,6 +96,22 @@
         dsl: 'gradient(speed: 0).rotate(angle: osc(min: 0.2, max: 0.4, speed: 1), speed: 0)'
       },
       {
+        // Matched-path animated rotation: the legacy side passes a JS function
+        // as the angle, so legacy Hydra also drives the angle through a
+        // per-frame uniform (hydra inlines constant arguments into the shader
+        // instead, where the SwiftShader compiler folds cos/sin at build time).
+        // On this Linux host the original constant-argument case above differs
+        // from its own legacy function-argument render by 96/16,384 bytes
+        // (max delta 1) — the residual lives inside legacy Hydra between its
+        // inlined-constant and uniform paths, not between the engines. This
+        // case therefore isolates true animated-parameter parity and is
+        // byte-exact here.
+        name: 'rotate_animated_uniform_parameter',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).rotate(() => 30, 0),
+        dsl: 'gradient(speed: 0).rotate(angle: osc(min: 0.2, max: 0.4, speed: 1), speed: 0)'
+      },
+      {
         name: 'src_external_surface',
         setupFrames: 2,
         legacySetup: hydra => hydra.synth.gradient(0).out(hydra.o[1]),

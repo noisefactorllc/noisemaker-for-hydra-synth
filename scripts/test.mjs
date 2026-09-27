@@ -40,7 +40,7 @@ console.log(`[test] using Chrome binary: ${CHROME}`)
 const PORT = process.env.PORT || 8765
 const LEGACY_BUNDLE = join(process.cwd(), 'dev-noisemaker', '.legacy-hydra-synth.js')
 const SWEEPS = [
-  { url: '/dev-noisemaker/pixel-parity.html', name: 'pixel-parity', expectPass: 62 }
+  { url: '/dev-noisemaker/pixel-parity.html', name: 'pixel-parity', expectPass: 63 }
 ]
 
 function startServer() {
