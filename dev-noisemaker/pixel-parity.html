@@ -26,6 +26,12 @@
     import { isExecutableHydraEffect } from '../src/engine/hydraGlsl.js'
 
     const log = document.getElementById('log')
+    // Sweep canvas size is overridable for size-coverage sweeps: the runner
+    // executes this page at the default 64x64 and at 96x48 (?w=96&h=48).
+    // Defaults preserve the historical 64x64 bytes exactly.
+    const sizeParams = new URLSearchParams(location.search)
+    const W = Number(sizeParams.get('w')) || 64
+    const H = Number(sizeParams.get('h')) || 64
     const emit = (line) => {
       const div = document.createElement('div')
       div.textContent = line
@@ -142,6 +148,22 @@
         dsl: 'gradient(speed: 0).contrast(amount: 1.7).hue(hue: 0.35).saturate(amount: 2.5)'
       },
       {
+        // Third bounded matrix point: a geometry chain at non-default
+        // parameters (triangle shape, scroll offset) at a nonzero time.
+        name: 'parameter_matrix_geometry',
+        time: 0.3,
+        legacy: hydra => hydra.synth.shape(3, 0.9, 0.4).scroll(0.1, -0.05, 0, 0).posterize(3, 1.2),
+        dsl: 'shape(sides: 3, radius: 0.9, smoothing: 0.4).scroll(scrollX: 0.1, scrollY: -0.05, speedX: 0, speedY: 0).posterize(bins: 3, gamma: 1.2)'
+      },
+      {
+        // Fourth bounded matrix point: a combine chain with a nested texture
+        // and a non-default blend amount at a nonzero time.
+        name: 'parameter_matrix_combine',
+        time: 0.15,
+        legacy: hydra => hydra.synth.gradient(0).blend(hydra.synth.noise(4, 0.2), 0.65),
+        dsl: 'gradient(speed: 0).blend(tex: noise(scale: 4, offset: 0.2), amount: 0.65)'
+      },
+      {
         // Current Hydra source reference: gradient = vec4(_st, sin(time*speed), 1.0)
         // with speed 0 → (x, y, 0, 1); sum(scale) = vec4(vec3(v.r+v.g+v.b+v.a), _c0.a).
         // With scale = 0.25 per channel: rgb = 0.25*(x + y + 1), alpha = 1.
@@ -168,14 +190,14 @@
     )
 
     function referencePixels(fixture) {
-      const data = new Uint8ClampedArray(64 * 64 * 4)
-      for (let py = 0; py < 64; py++) {
-        for (let px = 0; px < 64; px++) {
+      const data = new Uint8ClampedArray(W * H * 4)
+      for (let py = 0; py < H; py++) {
+        for (let px = 0; px < W; px++) {
           // Match the GLSL pixel-center mapping: st = gl_FragCoord/resolution.
-          const x = (2 * px + 1) / 128
-          const y = (2 * py + 1) / 128
+          const x = (2 * px + 1) / (2 * W)
+          const y = (2 * py + 1) / (2 * H)
           const [r, g, b, a] = fixture.reference(x, y)
-          const o = (py * 64 + px) * 4
+          const o = (py * W + px) * 4
           data[o] = Math.round(Math.min(Math.max(r, 0), 1) * 255)
           data[o + 1] = Math.round(Math.min(Math.max(g, 0), 1) * 255)
           data[o + 2] = Math.round(Math.min(Math.max(b, 0), 1) * 255)
@@ -203,7 +225,7 @@
         if (delta > maxDelta) maxDelta = delta
       }
       const samplePixel = (buffer, x, y) => {
-        const offset = (y * 64 + x) * 4
+        const offset = (y * W + x) * 4
         return Array.from(buffer.slice(offset, offset + 4))
       }
       return {
@@ -212,9 +234,9 @@
         totalBytes: actual.length,
         samples: [
           { at: [0, 0], actual: samplePixel(actual, 0, 0), expected: samplePixel(expected, 0, 0) },
-          { at: [63, 0], actual: samplePixel(actual, 63, 0), expected: samplePixel(expected, 63, 0) },
-          { at: [0, 63], actual: samplePixel(actual, 0, 63), expected: samplePixel(expected, 0, 63) },
-          { at: [63, 63], actual: samplePixel(actual, 63, 63), expected: samplePixel(expected, 63, 63) }
+          { at: [W - 1, 0], actual: samplePixel(actual, W - 1, 0), expected: samplePixel(expected, W - 1, 0) },
+          { at: [0, H - 1], actual: samplePixel(actual, 0, H - 1), expected: samplePixel(expected, 0, H - 1) },
+          { at: [W - 1, H - 1], actual: samplePixel(actual, W - 1, H - 1), expected: samplePixel(expected, W - 1, H - 1) }
         ]
       }
     }
@@ -248,8 +270,8 @@
       const LegacyHydra = window.Hydra
       return new LegacyHydra({
         canvas,
-        width: 64,
-        height: 64,
+        width: W,
+        height: H,
         makeGlobal: false,
         autoLoop: false,
         detectAudio: false,
@@ -272,8 +294,8 @@
     async function createRenderer(canvas, engine) {
       const renderer = new engine.CanvasRenderer({
         canvas,
-        width: 64,
-        height: 64,
+        width: W,
+        height: H,
         basePath: DEFAULT_CDN,
         bundlePath: `${DEFAULT_CDN}/effects`,
         useBundles: true,
@@ -293,14 +315,14 @@
       if (fixture.dslSetup) {
         await renderer.compile(`search hydra\n${fixture.dslSetup}`)
         renderer.pipeline.globalUniforms.time = 0
-        renderer.pipeline.globalUniforms.resolution = [64, 64]
+        renderer.pipeline.globalUniforms.resolution = [W, H]
         for (let i = 0; i < fixture.setupFrames; i++) renderer.pipeline.render(0)
       }
       await renderer.compile(`search hydra\n${fixture.dsl}.write(o0)`)
       const time = fixture.time || 0
       renderer.pipeline.graph.renderSurface = 'o0'
       renderer.pipeline.globalUniforms.time = time
-      renderer.pipeline.globalUniforms.resolution = [64, 64]
+      renderer.pipeline.globalUniforms.resolution = [W, H]
       renderer.pipeline.render(time)
       return pixels(canvas)
     }
@@ -309,7 +331,7 @@
       await renderer.loadEffects(['synth/perlin'])
       await compile.call(renderer, 'search synth\nperlin().write(o0)')
       renderer.pipeline.globalUniforms.time = 0
-      renderer.pipeline.globalUniforms.resolution = [64, 64]
+      renderer.pipeline.globalUniforms.resolution = [W, H]
       renderer.pipeline.render(0)
       return pixels(canvas)
     }
@@ -319,6 +341,11 @@
       const portedCanvas = document.getElementById('ported')
       const nativeReferenceCanvas = document.getElementById('native-reference')
       const nativeInterfaceCanvas = document.getElementById('native-interface')
+      for (const canvas of [legacyCanvas, portedCanvas, nativeReferenceCanvas, nativeInterfaceCanvas]) {
+        canvas.width = W
+        canvas.height = H
+      }
+      emit(`size ${W}x${H}`)
       const legacy = createLegacy(legacyCanvas)
       const noisemakerEngine = await loadEngine()
       const nativeCompile = noisemakerEngine.CanvasRenderer.prototype.compile
@@ -355,14 +382,14 @@
         await ported.compile(`search synth\nperlin().write(${transition.surface})`)
         ported.pipeline.graph.renderSurface = transition.surface
         ported.pipeline.globalUniforms.time = 0
-        ported.pipeline.globalUniforms.resolution = [64, 64]
+        ported.pipeline.globalUniforms.resolution = [W, H]
         ported.pipeline.render(0)
         const expected = pixels(portedCanvas)
 
         await ported.compile(`search hydra\n${transition.dsl}`)
         ported.pipeline.graph.renderSurface = 'o0'
         ported.pipeline.globalUniforms.time = 0
-        ported.pipeline.globalUniforms.resolution = [64, 64]
+        ported.pipeline.globalUniforms.resolution = [W, H]
         ported.pipeline.render(0)
         const actual = pixels(portedCanvas)
         const result = compare(actual, expected)
@@ -378,14 +405,14 @@
       await ported.compile('search hydra\ngradient(speed: 0).write(o1)')
       ported.pipeline.graph.renderSurface = 'o1'
       ported.pipeline.globalUniforms.time = 0
-      ported.pipeline.globalUniforms.resolution = [64, 64]
+      ported.pipeline.globalUniforms.resolution = [W, H]
       ported.pipeline.render(0)
       const expectedHydraToNative = pixels(portedCanvas)
 
       await ported.compile('search io\nread(o1).write(o0)')
       ported.pipeline.graph.renderSurface = 'o0'
       ported.pipeline.globalUniforms.time = 0
-      ported.pipeline.globalUniforms.resolution = [64, 64]
+      ported.pipeline.globalUniforms.resolution = [W, H]
       ported.pipeline.render(0)
       const actualHydraToNative = pixels(portedCanvas)
       const hydraToNativeResult = compare(actualHydraToNative, expectedHydraToNative)
@@ -401,14 +428,14 @@
       await ported.compile('search hydra\ngradient(speed: 0).write(o0)')
       ported.pipeline.graph.renderSurface = 'o0'
       ported.pipeline.globalUniforms.time = 0
-      ported.pipeline.globalUniforms.resolution = [64, 64]
+      ported.pipeline.globalUniforms.resolution = [W, H]
       ported.pipeline.render(0)
       const expectedMixedPrev = pixels(portedCanvas)
 
       await ported.compile('search hydra, filter\nprev().invert().invert().write(o0)')
       ported.pipeline.graph.renderSurface = 'o0'
       ported.pipeline.globalUniforms.time = 0
-      ported.pipeline.globalUniforms.resolution = [64, 64]
+      ported.pipeline.globalUniforms.resolution = [W, H]
       ported.pipeline.render(0)
       const actualMixedPrev = pixels(portedCanvas)
       const mixedPrevResult = compare(actualMixedPrev, expectedMixedPrev)

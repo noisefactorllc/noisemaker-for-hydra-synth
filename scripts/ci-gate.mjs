@@ -5,14 +5,14 @@
  * portion of the gate:
  *
  *  - Every expected case executes: ok + fail must equal the full
- *    denominator (62 cases), enforced from independent per-case line
+ *    denominator (65 cases per size sweep), enforced from independent per-case line
  *    accounting. Missing cases fail the gate.
  *  - Failure policy (criterion: "mismatches must fail qualification"):
  *    strict only. The sweep must be fully exact (0 failures). There is
  *    deliberately NO residual-tolerance opt-in: tolerating the documented
  *    Linux animated-parameter residual (rotate_animated_parameter,
  *    96/16384 bytes, max channel delta 1, per docs/COMPLETION_GAPS.md
- *    GAP-003 sweep status) would be an unratified policy weakening of the
+ *    GAP-001 sweep status) would be an unratified policy weakening of the
  *    criterion. A host that cannot produce an exact sweep fails the gate
  *    by design, until the residual is fixed or the policy change is
  *    explicitly ratified by the actor with workflow authority. The
@@ -57,6 +57,9 @@ process.on('SIGINT', () => { cleanupScratchBundle(); process.exit(130) })
 process.on('SIGTERM', () => { cleanupScratchBundle(); process.exit(143) })
 process.on('exit', cleanupScratchBundle)
 const SWEEP_URL = '/dev-noisemaker/pixel-parity.html'
+// The gate sweeps the page at the default 64x64 and at 96x48 (?w=96&h=48),
+// enforcing the full denominator and zero-failure policy on each sweep.
+const SWEEP_URLS = [SWEEP_URL, `${SWEEP_URL}?w=96&h=48`]
 // Set when the gate itself added the `upstream` remote for a bare checkout;
 // the finally block removes it again so the run leaves no git-config change.
 let addedUpstream = false
@@ -75,12 +78,13 @@ const LEGACY_BUNDLE_SHA256 = 'b4881aa9dfbd990a9e37fe6766581816fc273cdd42471e13bf
 // workflow authority (the qualified macOS host record for the legacy
 // 58-case suite is 58/58 exact). The GAP-001 complete expected-case
 // inventory remains open and is not claimed by this runner.
-// The page now emits 63 cases: `sum` was never a generated legacy case (the
+// The page emits 65 cases per size sweep (the page runs once at 64x64 and
+// once at 96x48 via ?w=96&h=48): `sum` was never a generated legacy case (the
 // authority bundle's sum shader cannot compile) and stays excluded there;
-// `sum_reference`, `sum_default_scale`, the two parameter-matrix cases and
+// `sum_reference`, `sum_default_scale`, the four parameter-matrix cases and
 // `rotate_animated_uniform_parameter` were added on top of the original
-// generated fixtures. Denominator is 63.
-const TOTAL_CASES = 63
+// generated fixtures. Denominator is 65 per sweep.
+const TOTAL_CASES = 65
 
 function startServer(port) {
   // Installs use --bin-links=false, so no http-server binary exists; run it
@@ -305,22 +309,25 @@ try {
   await waitForServer(servingPort)
   console.log(`[ci-gate] http-server verified serving on port ${servingPort} (page bytes match the checkout)`)
 
-  console.log(`[ci-gate] pixel-parity: GET ${SWEEP_URL}`)
-  const { dom, status } = runChromeDump(SWEEP_URL, servingPort)
-  if (status !== 0 && status !== null) {
-    throw new Error(`chrome dump failed (status=${status})`)
+  let allSweepsPassed = true
+  for (const sweepUrl of SWEEP_URLS) {
+    console.log(`[ci-gate] pixel-parity: GET ${sweepUrl}`)
+    const { dom, status } = runChromeDump(sweepUrl, servingPort)
+    if (status !== 0 && status !== null) {
+      throw new Error(`chrome dump failed (status=${status})`)
+    }
+    const summary = parseSummary(dom)
+    const { ok, total, fail, failures, perCaseCount } = summary
+    console.log(`[ci-gate] pixel-parity ${sweepUrl}: ${ok}/${total} pass, ${fail} fail (${perCaseCount} per-case lines counted)`)
+    const evaluation = evaluateSweep(summary, TOTAL_CASES)
+    for (const reason of evaluation.reasons) console.error(`[ci-gate] FAIL: ${reason}`)
+    if (!evaluation.passed) allSweepsPassed = false
   }
-  const summary = parseSummary(dom)
-  const { ok, total, fail, failures, perCaseCount } = summary
-  console.log(`[ci-gate] pixel-parity: ${ok}/${total} pass, ${fail} fail (${perCaseCount} per-case lines counted)`)
-  const evaluation = evaluateSweep(summary, TOTAL_CASES)
-  for (const reason of evaluation.reasons) console.error(`[ci-gate] FAIL: ${reason}`)
-  const passed = evaluation.passed
-  if (!passed) {
+  if (!allSweepsPassed) {
     console.error('[ci-gate] FAILURES — gate rejected')
     process.exitCode = 1
   } else {
-    console.log(`[ci-gate] GREEN: all ${TOTAL_CASES} cases executed with zero failures (exact sweep)`)
+    console.log(`[ci-gate] GREEN: all ${SWEEP_URLS.length} size sweeps of ${TOTAL_CASES} cases executed with zero failures (exact sweep)`)
   }
 } catch (err) {
   console.error('[ci-gate] error:', err)

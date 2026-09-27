@@ -22,17 +22,17 @@ function dom({ okCases, failCases, summaryOk, summaryFail, summaryTotal, duplica
   return `<html><body><div id="log"><div>${lines.join('</div><div>')}</div></div><script></script></body></html>`
 }
 
-const TOTAL = 63
+const TOTAL = 65
 
-test('evaluateSweep GREEN path: fully exact 63/63 sweep passes with zero reasons', () => {
+test('evaluateSweep GREEN path: fully exact 65/65 sweep passes with zero reasons', () => {
   const parsed = parseSummary(dom({ okCases: TOTAL, failCases: 0, summaryOk: TOTAL, summaryFail: 0, summaryTotal: TOTAL }))
   const result = evaluateSweep(parsed, TOTAL)
   assert.equal(result.passed, true)
   assert.deepEqual(result.reasons, [])
 })
 
-test('evaluateSweep: 62/63 with one mismatch fails with the strict mismatch reason, reported once', () => {
-  const parsed = parseSummary(dom({ okCases: 62, failCases: 1, summaryOk: 62, summaryFail: 1, summaryTotal: TOTAL }))
+test('evaluateSweep: 64/65 with one mismatch fails with the strict mismatch reason, reported once', () => {
+  const parsed = parseSummary(dom({ okCases: 64, failCases: 1, summaryOk: 64, summaryFail: 1, summaryTotal: TOTAL }))
   const result = evaluateSweep(parsed, TOTAL)
   assert.equal(result.passed, false)
   assert.equal(result.reasons.length, 1)
@@ -41,9 +41,9 @@ test('evaluateSweep: 62/63 with one mismatch fails with the strict mismatch reas
 })
 
 test('evaluateSweep: a page bug that misreports the summary while silently skipping a case fails', () => {
-  // 62 per-case lines but the summary claims 63 total — the page's own
+  // 64 per-case lines but the summary claims 65 total — the page's own
   // accounting must not be trusted.
-  const parsed = parseSummary(dom({ okCases: 62, failCases: 0, summaryOk: 63, summaryFail: 0, summaryTotal: TOTAL }))
+  const parsed = parseSummary(dom({ okCases: 64, failCases: 0, summaryOk: 65, summaryFail: 0, summaryTotal: TOTAL }))
   const result = evaluateSweep(parsed, TOTAL)
   assert.equal(result.passed, false)
   assert.ok(result.reasons.some(r => r.includes('per-case line count')))
@@ -51,14 +51,14 @@ test('evaluateSweep: a page bug that misreports the summary while silently skipp
 })
 
 test('evaluateSweep: a page reporting a case more than once fails', () => {
-  const parsed = parseSummary(dom({ okCases: 62, failCases: 0, summaryOk: 63, summaryFail: 0, summaryTotal: TOTAL, duplicate: true }))
+  const parsed = parseSummary(dom({ okCases: 64, failCases: 0, summaryOk: 65, summaryFail: 0, summaryTotal: TOTAL, duplicate: true }))
   const result = evaluateSweep(parsed, TOTAL)
   assert.equal(result.passed, false)
   assert.ok(result.reasons.some(r => r.includes('duplicate ok case names')))
 })
 
 test('evaluateSweep: unreported failures (FAIL line without summary acknowledgement) fail', () => {
-  const parsed = parseSummary(dom({ okCases: 62, failCases: 1, summaryOk: 63, summaryFail: 0, summaryTotal: TOTAL }))
+  const parsed = parseSummary(dom({ okCases: 64, failCases: 1, summaryOk: 65, summaryFail: 0, summaryTotal: TOTAL }))
   const result = evaluateSweep(parsed, TOTAL)
   assert.equal(result.passed, false)
   assert.ok(result.reasons.some(r => r.includes('unreported failures')))
