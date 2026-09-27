@@ -1,0 +1,64 @@
+{
+  "gap": "GAP-001",
+  "recorded": "2026-09-27",
+  "purpose": "Record the verification evidence for the published candidate's own changes (adbdba5d783d169dccf46c02fa894fc343fff6aa raised the sweep denominator to 65 and added the dual-size sweep) plus this candidate's additions: six second-time-point cases (osc_nonzero_time_t075, voronoi_src_t075, parameter_matrix_t075, parameter_matrix_color_t05, parameter_matrix_geometry_t06, parameter_matrix_combine_t075; denominator 65 -> 71), the attribution of the new 96x48 hydra_to_native_read_surface residual, and the build reproduction. The publication commit carrying this receipt extends published base adbdba5d783d169dccf46c02fa894fc343fff6aa.",
+  "host": {
+    "os": "Debian GNU/Linux 12 (bookworm), Linux 6.8.0-134-generic",
+    "node": "26.5.1",
+    "chrome": "/usr/bin/chromium — Chromium 154.0.8037.57 built on Debian GNU/Linux 12 (bookworm)",
+    "renderer": "SwiftShader WebGL2 (headless)",
+    "candidate_base": "adbdba5d783d169dccf46c02fa894fc343fff6aa (published default branch origin/main)"
+  },
+  "runs": [
+    {
+      "name": "unit suite at the candidate",
+      "command": "node --test test/*.test.mjs",
+      "result": "tests 52, pass 52, fail 0, cancelled 0, skipped 0, todo 0",
+      "exit_code": 0
+    },
+    {
+      "name": "rendered sweep 64x64 (71-case suite, dual-size)",
+      "command": "CHROME=/usr/bin/chromium node scripts/test.mjs (pixel-parity-64x64 leg)",
+      "result": "70 ok, 1 fail (expected >= 71 ok, 0 fail). The single failure is the documented attributed host residual: rotate_animated_parameter -> 96/16384 bytes differ; max delta 1; samples [{\"at\":[0,0],\"actual\":[232,0,0,255],\"expected\":[232,0,0,255]},{\"at\":[63,0],\"actual\":[255,232,0,255],\"expected\":[255,232,0,255]},{\"at\":[0,63],\"actual\":[0,23,0,255],\"expected\":[0,23,0,255]},{\"at\":[63,63],\"actual\":[23,255,0,255],\"expected\":[23,255,0,255]}] — unchanged signature since the retained receipts (workflow-evidence/gap-001/rotate-residual-attribution.json). All six new second-time-point cases are byte-exact.",
+      "exit_code": 1,
+      "exit_code_note": "scripts/test.mjs enforces fail === 0 (strict zero-failure policy, unchanged); the attributed residual fails the gate on this host by design."
+    },
+    {
+      "name": "rendered sweep 96x48 (71-case suite, dual-size)",
+      "command": "CHROME=/usr/bin/chromium node scripts/test.mjs (pixel-parity-96x48 leg, ?w=96&h=48)",
+      "result": "69 ok, 2 fail (expected >= 71 ok, 0 fail). Failures: (1) rotate_animated_parameter -> 104/18432 bytes differ; max delta 1; samples [{\"at\":[0,0],\"actual\":[231,0,0,255],\"expected\":[231,0,0,255]},{\"at\":[95,0],\"actual\":[255,233,0,255],\"expected\":[255,233,0,255]},{\"at\":[0,47],\"actual\":[0,22,0,255],\"expected\":[0,22,0,255]},{\"at\":[95,47],\"actual\":[24,255,0,255],\"expected\":[24,255,0,255]}] — same attributed legacy-internal constant-folding artifact at the second size; (2) hydra_to_native_read_surface -> 144/18432 bytes differ; max delta 1; samples [{\"at\":[0,0],\"actual\":[1,3,0,255],\"expected\":[1,3,0,255]},{\"at\":[95,0],\"actual\":[254,3,0,255],\"expected\":[254,3,0,255]},{\"at\":[0,47],\"actual\":[1,252,0,255],\"expected\":[1,252,0,255]},{\"at\":[95,47],\"actual\":[254,252,0,255],\"expected\":[254,252,0,255]}] — newly exposed by the second sweep size, attributed below. All six new second-time-point cases are byte-exact at 96x48.",
+      "exit_code": 1,
+      "exit_code_note": "Same strict zero-failure policy; documented residuals fail the gate on this host by design."
+    },
+    {
+      "name": "gate accounting unit tests at denominator 71",
+      "command": "node --test test/ci-gate-accounting.test.mjs",
+      "result": "6 pass, 0 fail — synthetic sweep DOMs updated to the 71-case denominator (70/71 mismatch case, misreported summary, duplicate ok names, unreported failures, no-summary fail-closed, exact 71/71 GREEN path).",
+      "exit_code": 0
+    },
+    {
+      "name": "build reproduction",
+      "command": "npm run build",
+      "result": "Exit 0. Built dist/hydra-synth.{esm,esm.min,,min}.js. Tracked bundle bytes unchanged by the rebuild (git status showed only the candidate's edited source files). Bundle sha256: hydra-synth.esm.js c8015c6b194c7ad0c3fc5cad756cb217a7b882666d275d986be85096f4fd756b; hydra-synth.esm.min.js c2b12f28504e99c18890c95b9fbf53663dbf4229d5bee7fbbcf54e95134f6c12; hydra-synth.js 2987b1760fd483367e49b45e832c3e178e33ed781b032d152a0c0ad0081b8085; hydra-synth.min.js 16a7b97b4f8baac03662eb43e2163387d9fb0a3084bc58dc65fb7814c1afb566; dist/index.html a1d52e3a8e6fd55ed8393e9832357ce4fbeea34396312f52f42463b6591c1033.",
+      "exit_code": 0
+    }
+  ],
+  "read_surface_residual_attribution": {
+    "case": "hydra_to_native_read_surface (search io\\nread(o1).write(o0) vs the displayed gradient surface o1)",
+    "observed": "Fails only at 96x48 (144/18,432 bytes, max delta 1); exact at 64x64. All differing bytes are +1 and confined to the gradient coordinate channels: red of column x=81 (216->217) for all 48 rows and green of row y=41 (220->221) for all 96 columns.",
+    "controlled_probe": "A probe page rendered gradient(speed: 0) to o1, then compared three read paths against the displayed o1 bytes at both sizes: (a) hydra src(tex: o1).write(o0) — 0 bytes differ at 64x64 AND 96x48 (the port's own surface-sampling path is exact); (b) engine io read(o1).write(o0), first render after compile — an all-black frame (12,288/12,288 differ at 64x64; 13,824/18,432 differ, max 255, at 96x48); (c) the same io read re-rendered — correct values with exactly the 96x48 signature (144 bytes, max 1) and exact at 64x64.",
+    "mechanism": "The io read path carries an fp16 (half-float) precision step. Modeling each gradient coordinate value as fp16-round-tripped before 8-bit quantization predicts the observed failure set exactly: at 64x64 every value 255*(2n+1)/128 is exactly representable in fp16 (no rounding pixels — case exact); at 96x48 exactly two values are not: x=81 gives fp16(163/192)=0.849121 -> 217 (vs 216.484 -> 216) and y=41 gives fp16(83/96)=0.864746 -> 221 (vs 220.469 -> 220). Model prediction matches the observed pixels, channels, direction (+1), and values exactly.",
+    "ownership": "The io namespace and its read starter are registered by the Noisemaker engine (loaded from the CDN), not by this port: the port registers only the hydra namespace (src/engine/portHydraEffects.js registers HYDRA_NAMESPACE='hydra' exclusively). The port's own surface-sampling path (hydra src(tex: o1)) is byte-exact at both sizes.",
+    "classification": "Same automation-unsatisfiable class as the attributed rotate_animated_parameter residual on this host: an engine-internal precision artifact, not a port translation or engine-evaluation difference. It is documented, not tolerated: the case is unchanged, the strict zero-failure policy is unchanged, and closing it requires an exact-parity host or an explicitly ratified residual policy."
+  },
+  "time_point_coverage": {
+    "definition": "The Hydra effect catalog exposes no seed inputs (grep of src/glsl/glsl-functions.js and src/glsl/utility-functions.js finds no seed input), so seed coverage reduces to time-point coverage for the time-dependent fixtures. Time-dependence is determined per fixture from the effect bodies: the noise generator's body is _noise(vec3(_st*scale, offset*time)), so any chain with noise offset != 0 is time-dependent — this covers parameter_matrix (noise offset 2.5) and parameter_matrix_combine (nested noise offset 0.2); osc is time-dependent through its time*sync term (sync 0.2 in the nonzero-time cases); voronoi is time-dependent through its time*speed term (speed 0.3); the gradient-speed-0, contrast/hue/saturate, shape/scroll(speeds 0)/posterize chains have no time-dependent inputs, so parameter_matrix_color and parameter_matrix_geometry render identical bytes at any time — their second time points are still included and executed explicitly rather than relying on inferred invariance.",
+    "executed": "One additional time point per parameterized and time-dependent fixture, all as matched legacy-vs-port comparisons: osc_nonzero_time_t075 (t=0.75), voronoi_src_t075 (t=0.75), parameter_matrix_t075 (t=0.75), parameter_matrix_color_t05 (t=0.5), parameter_matrix_geometry_t06 (t=0.6), parameter_matrix_combine_t075 (t=0.75). All six are byte-exact at 64x64 and 96x48 (included in the 70/69 ok counts above). Denominator 65 -> 71 in scripts/ci-gate.mjs (TOTAL_CASES), scripts/test.mjs (expectPass) and test/ci-gate-accounting.test.mjs (TOTAL).",
+    "rotate_note": "A second time point for the matched-path animated case rotate_animated_uniform_parameter is not executable as a matched comparison: the DSL angle expression osc(min: 0.2, max: 0.4, speed: 1) reaches the legacy constant 30 only at t=0.25, so at any other time the two sides evaluate different angles. The original rotate_animated_parameter case remains host-blocked as attributed."
+  },
+  "notes": [
+    "The strict zero-failure gate policy is unchanged: no residual-tolerance opt-in exists and none is requested.",
+    "The sweep at this host remains 70/71 exact at 64x64 and 69/71 at 96x48 (documented, attributed residuals); the qualified macOS 58/58 record for the legacy 58-case suite stands unchanged.",
+    "GAP-001 remains open; no closure is claimed. The complete parameter matrix, the WebGPU WGSL backend, and additional-host media coverage remain outstanding per the gap record."
+  ]
+}

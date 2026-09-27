@@ -102,6 +102,23 @@
         dsl: 'gradient(speed: 0).rotate(angle: osc(min: 0.2, max: 0.4, speed: 1), speed: 0)'
       },
       {
+        // Second time point for the time-dependent osc generator: the same
+        // matched comparison at t=0.75 (the osc body's time*sync term with
+        // sync 0.2 makes osc time-dependent).
+        name: 'osc_nonzero_time_t075',
+        time: 0.75,
+        legacy: hydra => hydra.synth.osc(30, 0.2, 0.1),
+        dsl: 'hydraOsc(frequency: 30, sync: 0.2, offset: 0.1)'
+      },
+      {
+        // Second time point for the time-dependent voronoi generator
+        // (speed 0.3 at defaults): legacy voronoi(5, 0.3, 0.3) at t=0.75.
+        name: 'voronoi_src_t075',
+        time: 0.75,
+        legacy: hydra => hydra.synth.voronoi(5, 0.3, 0.3),
+        dsl: 'voronoi(scale: 5, speed: 0.3, blending: 0.3)'
+      },
+      {
         // Matched-path animated rotation: the legacy side passes a JS function
         // as the angle, so legacy Hydra also drives the angle through a
         // per-frame uniform (hydra inlines constant arguments into the shader
@@ -160,6 +177,46 @@
         // and a non-default blend amount at a nonzero time.
         name: 'parameter_matrix_combine',
         time: 0.15,
+        legacy: hydra => hydra.synth.gradient(0).blend(hydra.synth.noise(4, 0.2), 0.65),
+        dsl: 'gradient(speed: 0).blend(tex: noise(scale: 4, offset: 0.2), amount: 0.65)'
+      },
+      {
+        // Second time point for the time-dependent parameter_matrix chain:
+        // the noise generator's body is _noise(vec3(_st*scale, offset*time))
+        // (src/glsl/glsl-functions.js), so noise offset 2.5 makes this chain
+        // time-dependent.
+        name: 'parameter_matrix_t075',
+        time: 0.75,
+        legacy: hydra => hydra.synth.noise(3, 2.5).posterize(5, 0.7).shift(0.1, 0.2, 0.3, 0.4),
+        dsl: 'noise(scale: 3, offset: 2.5).posterize(bins: 5, gamma: 0.7).shift(r: 0.1, g: 0.2, b: 0.3, a: 0.4)'
+      },
+      {
+        // Second time point for the time-dependent parameter_matrix_color
+        // chain: contrast, hue, and saturate have no time-dependent inputs
+        // and gradient(speed: 0) is time-invariant, so this chain renders
+        // identical bytes at any time. Included for explicit coverage of the
+        // color-space matrix point rather than inferred invariance.
+        name: 'parameter_matrix_color_t05',
+        time: 0.5,
+        legacy: hydra => hydra.synth.gradient(0).contrast(1.7).hue(0.35).saturate(2.5),
+        dsl: 'gradient(speed: 0).contrast(amount: 1.7).hue(hue: 0.35).saturate(amount: 2.5)'
+      },
+      {
+        // Second time point for the time-dependent parameter_matrix_geometry
+        // chain: shape, scroll(speedX/speedY 0), and posterize have no
+        // time-dependent inputs, so this chain renders identical bytes at
+        // any time. Included for explicit coverage of the geometry matrix
+        // point rather than inferred invariance.
+        name: 'parameter_matrix_geometry_t06',
+        time: 0.6,
+        legacy: hydra => hydra.synth.shape(3, 0.9, 0.4).scroll(0.1, -0.05, 0, 0).posterize(3, 1.2),
+        dsl: 'shape(sides: 3, radius: 0.9, smoothing: 0.4).scroll(scrollX: 0.1, scrollY: -0.05, speedX: 0, speedY: 0).posterize(bins: 3, gamma: 1.2)'
+      },
+      {
+        // Second time point for the time-dependent parameter_matrix_combine
+        // chain: nested noise offset 0.2 makes the blend input time-dependent.
+        name: 'parameter_matrix_combine_t075',
+        time: 0.75,
         legacy: hydra => hydra.synth.gradient(0).blend(hydra.synth.noise(4, 0.2), 0.65),
         dsl: 'gradient(speed: 0).blend(tex: noise(scale: 4, offset: 0.2), amount: 0.65)'
       },

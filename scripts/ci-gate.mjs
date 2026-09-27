@@ -5,7 +5,7 @@
  * portion of the gate:
  *
  *  - Every expected case executes: ok + fail must equal the full
- *    denominator (65 cases per size sweep), enforced from independent per-case line
+ *    denominator (71 cases per size sweep), enforced from independent per-case line
  *    accounting. Missing cases fail the gate.
  *  - Failure policy (criterion: "mismatches must fail qualification"):
  *    strict only. The sweep must be fully exact (0 failures). There is
@@ -78,13 +78,16 @@ const LEGACY_BUNDLE_SHA256 = 'b4881aa9dfbd990a9e37fe6766581816fc273cdd42471e13bf
 // workflow authority (the qualified macOS host record for the legacy
 // 58-case suite is 58/58 exact). The GAP-001 complete expected-case
 // inventory remains open and is not claimed by this runner.
-// The page emits 65 cases per size sweep (the page runs once at 64x64 and
+// The page emits 71 cases per size sweep (the page runs once at 64x64 and
 // once at 96x48 via ?w=96&h=48): `sum` was never a generated legacy case (the
 // authority bundle's sum shader cannot compile) and stays excluded there;
-// `sum_reference`, `sum_default_scale`, the four parameter-matrix cases and
-// `rotate_animated_uniform_parameter` were added on top of the original
-// generated fixtures. Denominator is 65 per sweep.
-const TOTAL_CASES = 65
+// `sum_reference`, `sum_default_scale`, the four parameter-matrix cases,
+// `rotate_animated_uniform_parameter` and the six second-time-point cases
+// (`osc_nonzero_time_t075`, `voronoi_src_t075`, `parameter_matrix_t075`,
+// `parameter_matrix_color_t05`, `parameter_matrix_geometry_t06`,
+// `parameter_matrix_combine_t075`) were added on top of the original
+// generated fixtures. Denominator is 71 per sweep.
+const TOTAL_CASES = 71
 
 function startServer(port) {
   // Installs use --bin-links=false, so no http-server binary exists; run it
