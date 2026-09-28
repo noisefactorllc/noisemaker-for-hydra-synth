@@ -14,6 +14,10 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
 const [chrome, url, timeoutMs, out] = process.argv.slice(2)
+// Mirror the unit suite's dumps (which succeed repeatedly on the GitHub
+// macos-15 runner): talk to the server over 127.0.0.1, not localhost -
+// macOS can resolve localhost to ::1 first.
+const safeUrl = url.replace('http://localhost:', 'http://127.0.0.1:')
 if (!chrome || !url || !timeoutMs || !out) {
   console.error('usage: node scripts/chrome-dump.mjs <chrome> <url> <timeout-ms> <out-file>')
   process.exit(3)
@@ -28,12 +32,17 @@ const args = [
   // timeout, run 36486021589); harmless elsewhere.
   '--use-mock-keychain',
   '--disable-background-networking',
+  // Chrome's own stderr logging pinpoints where a dump hangs (launch, page
+  // load, or rendering) when the gate surfaces it via check-run
+  // annotations; success is exit 0 with a non-empty DOM file, so stderr is
+  // diagnostic only.
+  '--enable-logging=stderr',
   '--user-data-dir=' + profileDir,
   ...(proxy ? ['--proxy-server=' + proxy] : []),
   '--window-size=1024,1024',
   '--hide-scrollbars',
   '--virtual-time-budget=180000',
-  '--dump-dom', url
+  '--dump-dom', safeUrl
 ]
 let result
 try {

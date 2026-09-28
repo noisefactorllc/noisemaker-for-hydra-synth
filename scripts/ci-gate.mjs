@@ -35,7 +35,7 @@
 import { spawn, spawnSync } from 'node:child_process'
 import { LEGACY_BUNDLE, LEGACY_BUNDLE_SHA256, cleanupScratchBundle, materializeLegacyBundle } from './upstream-bundle.mjs'
 import { createHash } from 'node:crypto'
-import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -164,14 +164,19 @@ function runChromeDump(url, port) {
   // the retry is a launch retry, never a parity retry — a real mismatch
   // still fails.
   let result = spawnSync(process.execPath, childArgs, childOpts)
-  const childFailed = r => r.status !== 0 || (r.stderr || '').toString().trim() !== '' || r.error
+  // Success = exit 0 with a non-empty DOM file (chrome logs to stderr via
+  // --enable-logging=stderr even when healthy, so stderr is diagnostic
+  // only); failure carries the diagnostic (including chrome's own log
+  // tail) on stderr with exit 3.
+  const childFailed = r => r.error || r.status !== 0 || !existsSync(out) || statSync(out).size === 0
   if (childFailed(result)) {
     console.log('[ci-gate] chrome dump timed out or crashed; retrying once (launch retry)')
     result = spawnSync(process.execPath, childArgs, childOpts)
   }
   try {
     if (childFailed(result)) {
-      throw new Error(`chrome dump failed (exit=${result.status}): ${((result.stderr || '') || (result.error && result.error.message) || '').toString().trim().slice(0, 300)}`)
+      const diag = ((result.stderr || '') || (result.error && result.error.message) || '').toString().trim()
+      throw new Error(`chrome dump failed (exit=${result.status}): ...${diag.slice(-400)}`)
     }
     const dom = readFileSync(out, 'utf8')
     if (!dom) throw new Error('chrome exited with no DOM output (timeout or crash)')
