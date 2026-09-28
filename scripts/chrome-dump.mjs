@@ -22,6 +22,12 @@ const profileDir = mkdtempSync(join(tmpdir(), 'ci-gate-chrome-'))
 const proxy = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy
 const args = [
   '--headless', '--no-sandbox',
+  '--no-first-run', '--no-default-browser-check',
+  // macOS CI hang fix: without a mock keychain chrome blocks on Keychain
+  // access (observed on the GitHub macos-15 runner as a 900s spawnSync
+  // timeout, run 36486021589); harmless elsewhere.
+  '--use-mock-keychain',
+  '--disable-background-networking',
   '--user-data-dir=' + profileDir,
   ...(proxy ? ['--proxy-server=' + proxy] : []),
   '--window-size=1024,1024',
