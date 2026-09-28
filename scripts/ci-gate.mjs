@@ -33,9 +33,11 @@
  * Exits 0 only when the unit suite is clean and the sweep is fully exact.
  */
 import { spawn, spawnSync } from 'node:child_process'
+import { LEGACY_BUNDLE, LEGACY_BUNDLE_SHA256, cleanupScratchBundle, materializeLegacyBundle } from './upstream-bundle.mjs'
 import { createHash } from 'node:crypto'
-import { readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
+import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 
@@ -46,13 +48,11 @@ const CHROME = process.env.CHROME ||
 // Port 0 means "pick a free port" so concurrent gate and test.mjs runs cannot
 // collide on the shared 8765 default; override with PORT for pinned runs.
 const PORT = process.env.PORT ? Number(process.env.PORT) : 0
-const LEGACY_BUNDLE = join(process.cwd(), 'dev-noisemaker', '.legacy-hydra-synth.js')
 // Scratch-bundle hygiene: the finally block removes the bundle on every
 // normal path (including failures and the chrome-timeout throw). Signal
 // handlers cover SIGINT/SIGTERM so an interrupted run does not leave the
 // in-tree scratch file that would trip the no-dead-runtime contract test;
 // SIGKILL cannot be handled by any process.
-function cleanupScratchBundle() { try { rmSync(LEGACY_BUNDLE, { force: true }) } catch (_e) {} }
 process.on('SIGINT', () => { cleanupScratchBundle(); process.exit(130) })
 process.on('SIGTERM', () => { cleanupScratchBundle(); process.exit(143) })
 process.on('exit', cleanupScratchBundle)
@@ -63,10 +63,6 @@ const SWEEP_URLS = [SWEEP_URL, `${SWEEP_URL}?w=96&h=48`]
 // Set when the gate itself added the `upstream` remote for a bare checkout;
 // the finally block removes it again so the run leaves no git-config change.
 let addedUpstream = false
-// Immutable-authority pin: the retained upstream Hydra comparison bundle is
-// fetched from the `upstream` remote and must hash exactly to this recorded
-// identity; any other bytes fail the gate before the sweep runs.
-const LEGACY_BUNDLE_SHA256 = 'b4881aa9dfbd990a9e37fe6766581816fc273cdd42471e13bf6e79b705a5a7a1'
 // Failure-set policy. Strict only, by the criterion's plain reading:
 // "mismatches must fail qualification" — the sweep must be fully exact
 // (0 failures). The runner deliberately ships NO residual-tolerance
@@ -103,15 +99,25 @@ function startServer(port) {
 // test.mjs runs cannot collide on the shared 8765 default. Note: the kernel
 // reuses the port on bind only after close, so this is best-effort; the gate
 // still verifies the server comes up on the chosen port (waitForServer).
+// A sandboxed host may only serve on an allow-listed loopback range; the
+// first bindable entry of HOST_PORTS wins; the ephemeral port (0) is always
+// the final fallback.
 function pickFreePort() {
+  const allowed = (process.env.HOST_PORTS || '').split(',').map(Number).filter(n => Number.isInteger(n) && n > 0).concat(0)
   return new Promise((resolve, reject) => {
-    const srv = createServer()
-    srv.unref()
-    srv.on('error', reject)
-    srv.listen(0, '127.0.0.1', () => {
-      const { port } = srv.address()
-      srv.close(() => resolve(port))
-    })
+    const attempt = i => {
+      const srv = createServer()
+      srv.unref()
+      srv.on('error', () => {
+        if (i + 1 < allowed.length) attempt(i + 1)
+        else reject(new Error('no bindable port (tried ' + allowed.join(',') + ')'))
+      })
+      srv.listen(allowed[i], '127.0.0.1', () => {
+        const { port } = srv.address()
+        srv.close(() => resolve(port))
+      })
+    }
+    attempt(0)
   })
 }
 
@@ -139,23 +145,44 @@ async function waitForServer(port, timeoutMs = 30000) {
 }
 
 function runChromeDump(url, port) {
+  // Per-run user data dir: some sandboxed hosts (and concurrent runs) fail
+  // Chrome's default profile container or collide on a shared profile.
+  const profileDir = mkdtempSync(join(tmpdir(), 'ci-gate-chrome-'))
+  // Headless Chrome ignores the *_proxy environment variables; honor them
+  // explicitly so CDN fetches work through a filtering proxy. Chrome
+  // bypasses the proxy for loopback by default, so the local sweep server
+  // is unaffected.
+  const proxy = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy
   const args = [
     '--headless', '--no-sandbox',
+    '--user-data-dir=' + profileDir,
+    ...(proxy ? ['--proxy-server=' + proxy] : []),
     '--window-size=1024,1024',
     '--hide-scrollbars',
     '--virtual-time-budget=180000',
     '--dump-dom', `http://localhost:${port}${url}`
   ]
-  const result = spawnSync(CHROME, args, { encoding: 'utf8', timeout: 300000, killSignal: 'SIGKILL' })
-  if (result.error) {
-    throw new Error(`chrome launch failed: ${result.error.message}`)
+  try {
+    // One launch retry: a slow host (proxy-fetched CDN through the sweep
+    // page) can legitimately exceed one dump window; the retry is a launch
+    // retry, never a parity retry — a real mismatch still fails.
+    let result = spawnSync(CHROME, args, { encoding: 'utf8', timeout: 900000, killSignal: 'SIGKILL' })
+    if (result.error && /ETIMEDOUT/.test(result.error.message)) {
+      console.log('[ci-gate] chrome dump timed out; retrying once (launch retry)')
+      result = spawnSync(CHROME, args, { encoding: 'utf8', timeout: 900000, killSignal: 'SIGKILL' })
+    }
+    if (result.error) {
+      throw new Error(`chrome launch failed: ${result.error.message}`)
+    }
+    if (result.status !== 0 && result.stdout === '') {
+      throw new Error(`chrome exited ${result.status} with no DOM output (timeout or crash)`)
+    }
+    // No scratch file: the DOM string is returned directly, so no temp dirs
+    // accumulate across runs.
+    return { dom: result.stdout, status: result.status }
+  } finally {
+    rmSync(profileDir, { recursive: true, force: true })
   }
-  if (result.status !== 0 && result.stdout === '') {
-    throw new Error(`chrome exited ${result.status} with no DOM output (timeout or crash)`)
-  }
-  // No scratch file: the DOM string is returned directly, so no temp dirs
-  // accumulate across runs.
-  return { dom: result.stdout, status: result.status }
 }
 
 // Pure sweep accounting: given a parseSummary result, enforce the complete
@@ -234,7 +261,7 @@ try {
   // qualification"), and the suite must actually run (tests > 0).
   console.log('[ci-gate] unit suite: node --test test/*.test.mjs')
   const unit = spawnSync(process.execPath, ['--test', ...readdirSync(join(process.cwd(), 'test')).filter(f => f.endsWith('.test.mjs')).map(f => join('test', f))],
-    { encoding: 'utf8', timeout: 600000, killSignal: 'SIGKILL', maxBuffer: 32 * 1024 * 1024 })
+    { encoding: 'utf8', timeout: 1800000, killSignal: 'SIGKILL', maxBuffer: 32 * 1024 * 1024 })
   if (unit.error) throw new Error(`unit suite failed to run: ${unit.error.message}`)
   const counters = {}
   for (const m of (unit.stdout || '').matchAll(/^ℹ (\w+) (\d+)$/gm)) counters[m[1]] = Number(m[2])
@@ -265,43 +292,8 @@ try {
     rmSync(LEGACY_BUNDLE, { force: true })
     process.exit(1)
   }
-  const UPSTREAM_URL = 'https://github.com/ojack/hydra-synth.git'
-  // Materialize the retained upstream Hydra comparison bundle. On a bare
-  // checkout (no `upstream` remote) the gate bootstraps it itself — adds the
-  // remote and shallow-fetches main — so no out-of-tree setup is required;
-  // a network failure then fails fast with the true root cause.
-  let legacy = spawnSync('git', ['show', 'upstream/main:dist/hydra-synth.js'], { encoding: 'buffer', maxBuffer: 16 * 1024 * 1024 })
-  if (legacy.status !== 0 || !legacy.stdout || legacy.stdout.length === 0) {
-    console.log('[ci-gate] bootstrapping the upstream remote (bare checkout)')
-    const add = spawnSync('git', ['remote', 'add', 'upstream', UPSTREAM_URL], { encoding: 'utf8' })
-    if (add.status !== 0 && !(add.stderr || '').toString().includes('already exists')) {
-      throw new Error(`cannot add the upstream remote (${UPSTREAM_URL}): ${(add.stderr || '').toString().trim()}`)
-    }
-    // Remember whether we added the remote so the cleanup path can remove
-    // it again: a bare-checkout gate run must not leave persistent changes
-    // in the checkout's git config.
-    if (add.status === 0) addedUpstream = true
-    const fetch = spawnSync('git', ['fetch', '--depth=1', 'upstream', 'main'], { encoding: 'utf8', timeout: 300000, killSignal: 'SIGKILL' })
-    if (fetch.status !== 0) {
-      if (addedUpstream) spawnSync('git', ['remote', 'remove', 'upstream'], { encoding: 'utf8' })
-      throw new Error(`cannot fetch the retained upstream Hydra bundle from ${UPSTREAM_URL}: ` +
-        `git fetch --depth=1 upstream main failed (status=${fetch.status}, stderr=${(fetch.stderr || '').toString().trim()}). ` +
-        `Network access to github.com is required; the gate fails rather than sweeping against missing authority.`)
-    }
-    legacy = spawnSync('git', ['show', 'upstream/main:dist/hydra-synth.js'], { encoding: 'buffer', maxBuffer: 16 * 1024 * 1024 })
-  }
-  if (legacy.status !== 0 || !legacy.stdout || legacy.stdout.length === 0) {
-    throw new Error(`cannot materialize the retained upstream Hydra bundle: ` +
-      `git show upstream/main:dist/hydra-synth.js failed (status=${legacy.status}, stderr=${(legacy.stderr || '').toString().trim()}).`)
-  }
-  // Hash the raw bytes (encoding: 'buffer'), not lossy-repaired utf8 text.
-  const actualHash = createHash('sha256').update(legacy.stdout).digest('hex')
-  if (actualHash !== LEGACY_BUNDLE_SHA256) {
-    throw new Error(`retained upstream Hydra bundle identity changed: ` +
-      `expected sha256 ${LEGACY_BUNDLE_SHA256}, got ${actualHash}. ` +
-      `The comparison authority moved; re-qualify the sweep against the new bytes on its own evidence before updating the pin.`)
-  }
-  writeFileSync(LEGACY_BUNDLE, legacy.stdout)
+  const { addedUpstream: gateAddedUpstream } = materializeLegacyBundle('[ci-gate]')
+  addedUpstream = gateAddedUpstream || addedUpstream
 
   // Resolve the serving port before starting the server: the configured
   // PORT, or a freshly picked free port (PORT unset) so concurrent gate and

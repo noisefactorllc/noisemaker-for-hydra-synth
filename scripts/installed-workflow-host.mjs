@@ -50,16 +50,17 @@ const { firefox, chromium } = createRequire(join(playwrightPath, 'package.json')
 
 function freePort() {
   // A sandboxed host may only serve on an allow-listed loopback range;
-  // HOST_PORTS lists those, otherwise bind an ephemeral port.
-  const allowed = (process.env.HOST_PORTS || '').split(',').map(Number).filter(n => Number.isInteger(n) && n > 0)
+  // HOST_PORTS lists those; the ephemeral port (0) is always the final
+  // fallback.
+  const allowed = (process.env.HOST_PORTS || '').split(',').map(Number).filter(n => Number.isInteger(n) && n > 0).concat(0)
   return new Promise((resolve, reject) => {
     const attempt = i => {
       const server = createServer()
       server.on('error', () => {
         if (i + 1 < allowed.length) attempt(i + 1)
-        else reject(new Error('no bindable port (tried ' + allowed.join(',') + ' and ephemeral)'))
+        else reject(new Error('no bindable port (tried ' + allowed.join(',') + ')'))
       })
-      server.listen(i < allowed.length ? allowed[i] : 0, '127.0.0.1', () => {
+      server.listen(allowed[i], '127.0.0.1', () => {
         const { port } = server.address()
         server.close(() => resolve(port))
       })

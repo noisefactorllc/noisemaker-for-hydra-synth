@@ -8,7 +8,9 @@
  * reported in the output so parity evidence records its provenance.
  */
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
-import { accessSync, constants, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { cleanupScratchBundle, LEGACY_BUNDLE, materializeLegacyBundle } from './upstream-bundle.mjs'
+import { accessSync, constants, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 
@@ -37,12 +39,35 @@ if (!CHROME) {
   process.exit(1)
 }
 console.log(`[test] using Chrome binary: ${CHROME}`)
-const PORT = process.env.PORT || 8765
-const LEGACY_BUNDLE = join(process.cwd(), 'dev-noisemaker', '.legacy-hydra-synth.js')
+// A sandboxed host may only serve on an allow-listed loopback range; the
+// first bindable entry of HOST_PORTS wins; the ephemeral port (0) is the
+// final fallback. Same policy as scripts/ci-gate.mjs. An explicit PORT env
+// still pins the server port (the documented invocation in COMPATIBILITY.md
+// and the gap receipts).
+const PORT = process.env.PORT ? Number(process.env.PORT) : await pickFreePort()
 const SWEEPS = [
   { url: '/dev-noisemaker/pixel-parity.html', name: 'pixel-parity-64x64', expectPass: 71 },
   { url: '/dev-noisemaker/pixel-parity.html?w=96&h=48', name: 'pixel-parity-96x48', expectPass: 71 }
 ]
+
+function pickFreePort() {
+  const allowed = (process.env.HOST_PORTS || '').split(',').map(Number).filter(n => Number.isInteger(n) && n > 0).concat(0)
+  return new Promise((resolve, reject) => {
+    const attempt = i => {
+      const srv = createServer()
+      srv.unref()
+      srv.on('error', () => {
+        if (i + 1 < allowed.length) attempt(i + 1)
+        else reject(new Error('no bindable port (tried ' + allowed.join(',') + ')'))
+      })
+      srv.listen(allowed[i], '127.0.0.1', () => {
+        const { port } = srv.address()
+        srv.close(() => resolve(port))
+      })
+    }
+    attempt(0)
+  })
+}
 
 function startServer() {
   // Installs use --bin-links=false, so no http-server binary exists; run it
@@ -67,16 +92,48 @@ async function waitForServer(timeoutMs = 5000) {
 }
 
 function runChromeDump(url) {
-  const tmp = mkdtempSync(join(tmpdir(), 'hydra-test-'))
+  // Per-run user data dir: some sandboxed hosts (and concurrent runs) fail
+  // Chrome's default profile container or collide on a shared profile.
+  const scratchRoot = process.env.HOST_SCRATCH || tmpdir()
+  mkdirSync(scratchRoot, { recursive: true })
+  const tmp = mkdtempSync(join(scratchRoot, 'hydra-test-'))
   const out = join(tmp, 'dom.html')
+  // Per-run user data dir: some sandboxed hosts (and concurrent runs) fail
+  // Chrome's default profile container or collide on a shared profile.
+  const profileDir = mkdtempSync(join(tmpdir(), 'hydra-test-profile-'))
+  // Headless Chrome ignores the *_proxy environment variables; honor them
+  // explicitly so CDN fetches work through a filtering proxy. Chrome
+  // bypasses the proxy for loopback by default, so the local sweep server
+  // is unaffected.
+  const proxy = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy
   const args = [
     '--headless', '--no-sandbox',
+    ...(process.env.HYDRA_TEST_CHROME_ARGS ? process.env.HYDRA_TEST_CHROME_ARGS.split(' ') : []),
+    '--user-data-dir=' + profileDir,
+    ...(proxy ? ['--proxy-server=' + proxy] : []),
     '--window-size=1024,1024',
     '--hide-scrollbars',
     '--virtual-time-budget=180000',
     '--dump-dom', `http://localhost:${PORT}${url}`
   ]
-  const result = spawnSync(CHROME, args, { encoding: 'utf8' })
+  let result
+  try {
+    // 900s with one launch retry: the sweep pages render 71 cases each and,
+    // on proxy-sandboxed hosts, a single dump can legitimately take longer
+    // than a fast local run. The retry is a launch retry, never a parity
+    // retry — a real mismatch still fails.
+    // Dump window is env-tunable (HOST-DELEGATED runs use a larger window
+    // within the broker's cap); one launch retry, never a parity retry —
+    // a real mismatch still fails.
+    const dumpTimeout = Number(process.env.HYDRA_TEST_DUMP_TIMEOUT) || 900000
+    result = spawnSync(CHROME, args, { encoding: 'utf8', timeout: dumpTimeout, killSignal: 'SIGKILL' })
+    if (result.error && /ETIMEDOUT/.test(result.error.message)) {
+      console.log('[test] chrome dump timed out; retrying once (launch retry)')
+      result = spawnSync(CHROME, args, { encoding: 'utf8', timeout: dumpTimeout, killSignal: 'SIGKILL' })
+    }
+  } finally {
+    rmSync(profileDir, { recursive: true, force: true })
+  }
   writeFileSync(out, result.stdout)
   return result.stdout
 }
@@ -100,37 +157,13 @@ function parseSummary(domText) {
 }
 
 let server, exitCode = 0
-// Hermeticity: on a bare checkout (no `upstream` remote) bootstrap the
-// upstream remote the same way scripts/ci-gate.mjs does — add it, shallow-
-// fetch main, and remove it again in the finally block so a test run leaves
-// no git-config change. A network failure fails fast with the root cause.
-const UPSTREAM_URL = 'https://github.com/ojack/hydra-synth.git'
+// The retained upstream Hydra comparison bundle is materialized by the
+// shared pinned helper (scripts/upstream-bundle.mjs): identical bytes and
+// SHA-256 pin as the strict gate, bootstrapping the remote on a bare
+// checkout.
 let addedUpstream = false
-function showUpstreamBundle() {
-  const show = () => execFileSync('git', ['show', 'upstream/main:dist/hydra-synth.js'], { encoding: 'utf8' })
-  try {
-    return show()
-  } catch (_e) {
-    console.log('[test] bootstrapping the upstream remote (bare checkout)')
-    const add = spawnSync('git', ['remote', 'add', 'upstream', UPSTREAM_URL], { encoding: 'utf8' })
-    if (add.status !== 0 && !(add.stderr || '').includes('already exists')) {
-      throw new Error(`cannot add the upstream remote (${UPSTREAM_URL}): ${(add.stderr || '').trim()}`)
-    }
-    if (add.status === 0) addedUpstream = true
-    const fetch = spawnSync('git', ['fetch', '--depth=1', 'upstream', 'main'], { encoding: 'utf8', timeout: 300000, killSignal: 'SIGKILL' })
-    if (fetch.status !== 0) {
-      throw new Error(`cannot fetch the retained upstream Hydra bundle from ${UPSTREAM_URL}: ` +
-        `git fetch --depth=1 upstream main failed (status=${fetch.status}, stderr=${(fetch.stderr || '').trim()}). ` +
-        'Network access to github.com is required; the sweep fails rather than testing against missing authority.')
-    }
-    return show()
-  }
-}
 try {
-  writeFileSync(
-    LEGACY_BUNDLE,
-    showUpstreamBundle()
-  )
+  addedUpstream = materializeLegacyBundle('[test]').addedUpstream
   console.log(`[test] starting http-server on port ${PORT}`)
   server = startServer()
   await waitForServer()
@@ -157,7 +190,6 @@ try {
 } finally {
   if (server) server.kill('SIGTERM')
   rmSync(LEGACY_BUNDLE, { force: true })
-  // Do not leave a test-added upstream remote in the checkout's config.
   if (addedUpstream) spawnSync('git', ['remote', 'remove', 'upstream'], { encoding: 'utf8' })
 }
 process.exit(exitCode)

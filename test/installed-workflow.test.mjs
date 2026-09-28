@@ -26,12 +26,23 @@ const CHROME = process.env.CHROME || '/usr/bin/chromium'
 const REPO = process.cwd()
 
 function freePort() {
-  return new Promise(resolve => {
-    const server = createServer()
-    server.listen(0, '127.0.0.1', () => {
-      const { port } = server.address()
-      server.close(() => resolve(port))
-    })
+  // A sandboxed host may only serve on an allow-listed loopback range;
+  // HOST_PORTS lists those; the ephemeral port (0) is always the final
+  // fallback.
+  const allowed = (process.env.HOST_PORTS || '').split(',').map(Number).filter(n => Number.isInteger(n) && n > 0).concat(0)
+  return new Promise((resolve, reject) => {
+    const attempt = i => {
+      const server = createServer()
+      server.on('error', () => {
+        if (i + 1 < allowed.length) attempt(i + 1)
+        else reject(new Error('no bindable port (tried ' + allowed.join(',') + ')'))
+      })
+      server.listen(allowed[i], '127.0.0.1', () => {
+        const { port } = server.address()
+        server.close(() => resolve(port))
+      })
+    }
+    attempt(0)
   })
 }
 
@@ -51,22 +62,48 @@ function repoTrackedHashes() {
 }
 
 function runChromeDump(url) {
+  // Per-run user data dir: some sandboxed hosts (and concurrent runs) fail
+  // Chrome's default profile container or collide on a shared profile.
+  const profileDir = mkdtempSync(join(process.env.HOST_SCRATCH || tmpdir(), 'gap002-chrome-'))
+  // Headless Chrome ignores the *_proxy environment variables; honor them
+  // explicitly so the CDN engine fetch works through a filtering proxy.
+  const proxy = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy
   const args = [
     '--headless', '--no-sandbox',
+    '--user-data-dir=' + profileDir,
+    // Chrome bypasses the proxy for loopback by default, so the test's own
+    // 127.0.0.1 server is unaffected.
+    ...(proxy ? ['--proxy-server=' + proxy] : []),
     '--window-size=1024,1024',
     '--hide-scrollbars',
     '--virtual-time-budget=180000',
     '--dump-dom', url
   ]
-  const result = spawnSync(CHROME, args, { encoding: 'utf8' })
-  if (result.status !== 0 && !result.stdout) {
-    throw new Error(`chromium exited ${result.status}: ${result.stderr}`)
+  try {
+    const result = spawnSync(CHROME, args, { encoding: 'utf8', timeout: 300000, killSignal: 'SIGKILL' })
+    if (!result.stdout) {
+      throw new Error(`chromium exited ${result.status} (timed_out=${result.error ? result.error.code === 'ETIMEDOUT' : false}) with no DOM output: ${result.stderr}`)
+    }
+    // A transient filtering-proxy failure shows up as the page's own
+    // engine-load error. Retry the dump once; any parity or workflow
+    // failure inside the page is returned unchanged and still fails the
+    // workflow test.
+    if (result.stdout.includes('Failed to load Noisemaker engine')) {
+      const retry = spawnSync(CHROME, args, { encoding: 'utf8', timeout: 300000, killSignal: 'SIGKILL' })
+      if (retry.stdout && !retry.stdout.includes('Failed to load Noisemaker engine')) {
+        return retry.stdout
+      }
+    }
+    return result.stdout
+  } finally {
+    rmSync(profileDir, { recursive: true, force: true })
   }
-  return result.stdout
 }
 
 test('installed package workflow: pack, install, exercise, reinstall, remove', async t => {
-  const scratch = mkdtempSync(join(tmpdir(), 'gap002-'))
+  const scratchRoot = process.env.HOST_SCRATCH || tmpdir()
+  mkdirSync(scratchRoot, { recursive: true })
+  const scratch = mkdtempSync(join(scratchRoot, 'gap002-'))
   const consumer = join(scratch, 'consumer')
   const packDir = join(scratch, 'pack')
   mkdirSync(consumer)
@@ -80,7 +117,11 @@ test('installed package workflow: pack, install, exercise, reinstall, remove', a
   const tarball = join(packDir, packJson[0].filename)
   assert.ok(existsSync(tarball), 'npm pack produced a tarball')
 
-  // Install into an isolated consumer.
+  // Install into an isolated consumer. Give the consumer an explicit package
+  // root so npm never walks up out of the scratch consumer (on some hosts the
+  // temp directory sits under a parent that owns a package.json, and the
+  // tarball would be recorded as a dependency of that package).
+  run('npm', ['init', '-y'], { cwd: consumer })
   run('npm', ['install', '--ignore-scripts', '--bin-links=false', '--no-audit', '--no-fund', tarball],
     { cwd: consumer })
   const installed = JSON.parse(readFileSync(join(consumer, 'node_modules', 'noisemaker-for-hydra-synth', 'package.json'), 'utf8'))
