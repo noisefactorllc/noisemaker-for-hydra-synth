@@ -41,7 +41,7 @@ renderer.start()
 
 ## Supported hosts and ownership
 
-Supported hosts are browsers with a WebGL2 implementation and network access to the engine CDN (`https://shaders.noisedeck.app/1`); the engine loads at runtime, so offline use is not supported. Measured hosts: Chromium 154.0.8037.57 headless (SwiftShader WebGL2, Debian 12 Linux) and Chrome 153.0.8010.53 (Apple M4, macOS 26.5). WebGPU is not supported; do not set `preferWebGPU: true`.
+Supported hosts are browsers with a WebGL2 implementation and network access to the engine CDN (`https://shaders.noisedeck.app/1`); the engine loads at runtime, so offline use is not supported. Measured hosts: Chromium 154.0.8037.57 headless (SwiftShader WebGL2, Debian 12 Linux), Firefox 155.0 (Mesa llvmpipe software WebGL2 under Xvfb, Debian 12 Linux), Chromium 153.0.8010.12 headless with hardware-accelerated WebGL2 (ANGLE Metal on Apple M4, macOS), and Chrome 153.0.8010.53 (Apple M4, macOS 26.5). Windows, GPU-hardware Linux, and Safari remain unmeasured. WebGPU is not supported; do not set `preferWebGPU: true`.
 
 Resource ownership:
 

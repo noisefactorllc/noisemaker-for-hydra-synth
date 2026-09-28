@@ -1,0 +1,92 @@
+{
+  "schema": "noisemaker-for-hydra-synth installed-workflow host evidence",
+  "gap": "GAP-002",
+  "generated_at": "2026-09-27T21:07:52.896Z",
+  "browser": "firefox",
+  "cycles": 60,
+  "node": "v26.5.1",
+  "repo": "/workspace/repos/noisemaker-for-hydra-synth",
+  "repo_git_head": "c2a28a0a778261b257113e142af6768a699ea07f",
+  "playwright_module": "/state/cache/scratch/pwenv/node_modules",
+  "commands": [
+    {
+      "command": "npm pack --json --pack-destination /tmp/gap002-host-kXVz5b/pack",
+      "cwd": "/workspace/repos/noisemaker-for-hydra-synth",
+      "exit_code": 0,
+      "stderr_tail": [
+        "npm warn gitignore-fallback No .npmignore file found, using .gitignore for file exclusion. Consider creating a .npmignore file to explicitly control published files."
+      ]
+    },
+    {
+      "command": "npm install --ignore-scripts --bin-links=false --no-audit --no-fund /tmp/gap002-host-kXVz5b/pack/noisemaker-for-hydra-synth-2.0.0-dev.0.tgz",
+      "cwd": "/tmp/gap002-host-kXVz5b/consumer",
+      "exit_code": 0,
+      "stderr_tail": []
+    }
+  ],
+  "runs": [
+    {
+      "page": "workflow.html",
+      "url": "http://127.0.0.1:44515/workflow.html?cycles=60",
+      "ok": 11,
+      "fail": 0,
+      "failures": [],
+      "renderer": "llvmpipe, or similar",
+      "console_errors": [
+        "Recompilation failed: Unknown effect: 'hydraMissing'; write() requires an input - cannot be first in chain: '[Write]' (line 2, col 16)"
+      ],
+      "page_errors": [],
+      "expected_ok_minimum": 11,
+      "pass": true
+    },
+    {
+      "page": "bundle.html",
+      "url": "http://127.0.0.1:44515/bundle.html?cycles=60",
+      "ok": 1,
+      "fail": 0,
+      "failures": [],
+      "renderer": "llvmpipe, or similar",
+      "console_errors": [],
+      "page_errors": [],
+      "expected_ok_minimum": 1,
+      "pass": true
+    }
+  ],
+  "reinstall": {
+    "command": "npm install --ignore-scripts --bin-links=false --no-audit --no-fund /tmp/gap002-host-kXVz5b/pack/noisemaker-for-hydra-synth-2.0.0-dev.0.tgz",
+    "cwd": "/tmp/gap002-host-kXVz5b/consumer",
+    "exit_code": 0,
+    "stderr_tail": [],
+    "package_intact": true,
+    "pass": true
+  },
+  "removal": {
+    "command": "npm uninstall --ignore-scripts --bin-links=false --no-audit --no-fund noisemaker-for-hydra-synth",
+    "cwd": "/tmp/gap002-host-kXVz5b/consumer",
+    "exit_code": 0,
+    "stderr_tail": [],
+    "package_absent": true,
+    "pass": true
+  },
+  "file_preservation": {
+    "tracked_file_count": 46,
+    "method": "sha256 over every git ls-files entry, before vs after the run",
+    "unchanged": true,
+    "pass": true
+  },
+  "pack": {
+    "tarball": "/tmp/gap002-host-kXVz5b/pack/noisemaker-for-hydra-synth-2.0.0-dev.0.tgz",
+    "filename": "noisemaker-for-hydra-synth-2.0.0-dev.0.tgz",
+    "file_count": 48,
+    "size_bytes": 1658160
+  },
+  "installed": {
+    "name": "noisemaker-for-hydra-synth",
+    "version": "2.0.0-dev.0"
+  },
+  "browser_version": "155.0",
+  "launch_options": {
+    "headless": false
+  },
+  "all_pass": true
+}

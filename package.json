@@ -31,7 +31,6 @@
   ],
   "author": "ojack",
   "license": "AGPL-3.0-only",
-  "dependencies": {},
   "devDependencies": {
     "esbuild": "^0.25.0",
     "http-server": "^14.1.1"
