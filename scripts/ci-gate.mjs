@@ -167,8 +167,14 @@ function runChromeDump(url, port) {
     // page) can legitimately exceed one dump window; the retry is a launch
     // retry, never a parity retry — a real mismatch still fails.
     let result = spawnSync(CHROME, args, { encoding: 'utf8', timeout: 900000, killSignal: 'SIGKILL' })
-    if (result.error && /ETIMEDOUT/.test(result.error.message)) {
-      console.log('[ci-gate] chrome dump timed out; retrying once (launch retry)')
+    // One launch retry for either a hung dump (ETIMEDOUT) or a crashed dump
+    // (nonzero exit with no DOM output) — macOS runner Chrome has exhibited
+    // both after prior chrome launches in the same process. Launch retries
+    // only, never parity retries: a real mismatch still fails.
+    const crashed = r => r.error && /ETIMEDOUT/.test(r.error.message)
+    const noDom = r => !r.error && r.status !== 0 && r.stdout === ''
+    if (crashed(result) || noDom(result)) {
+      console.log('[ci-gate] chrome dump timed out or crashed; retrying once (launch retry)')
       result = spawnSync(CHROME, args, { encoding: 'utf8', timeout: 900000, killSignal: 'SIGKILL' })
     }
     if (result.error) {
