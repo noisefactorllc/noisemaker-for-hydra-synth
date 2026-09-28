@@ -243,7 +243,7 @@ void main() {
   return { glsl, uniformBindings }
 }
 
-export function buildHydraShaderOverrides(compiled) {
+export function buildHydraShaderOverrides(compiled, promotedSurfaces = null) {
   const shaderOverrides = {}
   const outputSurfaces = []
   const preserveSurfaces = []
@@ -285,6 +285,22 @@ export function buildHydraShaderOverrides(compiled) {
             if (value.name === output) preserveSurfaces.push(output)
           }
         }
+      }
+    } else if (promotedSurfaces && output && !outputSurfaces.includes(output)) {
+      // Downstream-format parity: a plan whose final node is native (engine
+      // or builtin) but whose inputs read a Hydra-promoted surface must not
+      // have its write target fall back to the engine-default rgba16f — the
+      // fp16 write quantization would corrupt Hydra-produced values before
+      // the 8-bit readback (the hydra_to_native_read_surface residual).
+      // Promote the write target and preserve its contents across the
+      // format migration.
+      const readsPromotedSurface = (plan.chain || []).some(step =>
+        step.op !== '_write' &&
+        Object.values(step.args || {}).some(value =>
+          value?.kind === 'output' && promotedSurfaces.has(value.name)))
+      if (readsPromotedSurface) {
+        outputSurfaces.push(output)
+        preserveSurfaces.push(output)
       }
     }
 
@@ -479,9 +495,8 @@ export function installHydraCompiler(engine) {
   Object.defineProperty(prototype, INSTALLED, { value: true })
   prototype.compile = async function compileWithHydraParity(source, options = {}) {
     const compiled = engine.compile(source, options)
-    const hydra = buildHydraShaderOverrides(compiled)
-
     const previous = PROMOTED_SURFACES.get(this) || new Map()
+    const hydra = buildHydraShaderOverrides(compiled, previous)
     const promoted = new Set(hydra.outputSurfaces)
     const retain = new Set(hydra.retainSurfaces)
     const preserve = new Set(hydra.preserveSurfaces)

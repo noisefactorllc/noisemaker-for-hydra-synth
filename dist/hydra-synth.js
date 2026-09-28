@@ -1608,7 +1608,7 @@ void main() {
 `;
     return { glsl, uniformBindings };
   }
-  function buildHydraShaderOverrides(compiled) {
+  function buildHydraShaderOverrides(compiled, promotedSurfaces = null) {
     const shaderOverrides = {};
     const outputSurfaces = [];
     const preserveSurfaces = [];
@@ -1644,6 +1644,12 @@ void main() {
               if (value.name === output) preserveSurfaces.push(output);
             }
           }
+        }
+      } else if (promotedSurfaces && output && !outputSurfaces.includes(output)) {
+        const readsPromotedSurface = (plan.chain || []).some((step) => step.op !== "_write" && Object.values(step.args || {}).some((value) => value?.kind === "output" && promotedSurfaces.has(value.name)));
+        if (readsPromotedSurface) {
+          outputSurfaces.push(output);
+          preserveSurfaces.push(output);
         }
       }
       try {
@@ -1830,8 +1836,8 @@ void main() {
     Object.defineProperty(prototype, INSTALLED, { value: true });
     prototype.compile = async function compileWithHydraParity(source, options = {}) {
       const compiled = engine.compile(source, options);
-      const hydra = buildHydraShaderOverrides(compiled);
       const previous = PROMOTED_SURFACES.get(this) || /* @__PURE__ */ new Map();
+      const hydra = buildHydraShaderOverrides(compiled, previous);
       const promoted = new Set(hydra.outputSurfaces);
       const retain = new Set(hydra.retainSurfaces);
       const preserve = new Set(hydra.preserveSurfaces);

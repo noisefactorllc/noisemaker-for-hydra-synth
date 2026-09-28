@@ -268,6 +268,41 @@ test('retains a previously promoted surface read by a native plan', () => {
   })
 })
 
+test('promotes the write target of a native plan that consumes a Hydra-promoted surface', () => {
+  const compiled = compiledPlan([
+    {
+      op: '_read',
+      args: { tex: { kind: 'output', name: 'o1' } },
+      from: null,
+      temp: 0,
+      builtin: true
+    }
+  ])
+
+  const result = buildHydraShaderOverrides(compiled, new Map([['o1', {}]]))
+  assert.deepEqual(result.shaderOverrides, {})
+  assert.deepEqual(result.outputSurfaces, ['o0'])
+  assert.deepEqual(result.preserveSurfaces, ['o0'])
+  assert.deepEqual(result.retainSurfaces, ['o1'])
+})
+
+test('does not promote the write target of a native plan without Hydra-promoted inputs', () => {
+  const compiled = compiledPlan([
+    {
+      op: '_read',
+      args: { tex: { kind: 'output', name: 'o1' } },
+      from: null,
+      temp: 0,
+      builtin: true
+    }
+  ])
+
+  const result = buildHydraShaderOverrides(compiled, new Map())
+  assert.deepEqual(result.outputSurfaces, [])
+  assert.equal(result.preserveSurfaces, undefined)
+  assert.deepEqual(result.retainSurfaces, ['o1'])
+})
+
 test('retains native surface arguments even when the final node is not Hydra', () => {
   const compiled = compiledPlan([
     {

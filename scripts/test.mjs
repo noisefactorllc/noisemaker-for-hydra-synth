@@ -100,10 +100,36 @@ function parseSummary(domText) {
 }
 
 let server, exitCode = 0
+// Hermeticity: on a bare checkout (no `upstream` remote) bootstrap the
+// upstream remote the same way scripts/ci-gate.mjs does — add it, shallow-
+// fetch main, and remove it again in the finally block so a test run leaves
+// no git-config change. A network failure fails fast with the root cause.
+const UPSTREAM_URL = 'https://github.com/ojack/hydra-synth.git'
+let addedUpstream = false
+function showUpstreamBundle() {
+  const show = () => execFileSync('git', ['show', 'upstream/main:dist/hydra-synth.js'], { encoding: 'utf8' })
+  try {
+    return show()
+  } catch (_e) {
+    console.log('[test] bootstrapping the upstream remote (bare checkout)')
+    const add = spawnSync('git', ['remote', 'add', 'upstream', UPSTREAM_URL], { encoding: 'utf8' })
+    if (add.status !== 0 && !(add.stderr || '').includes('already exists')) {
+      throw new Error(`cannot add the upstream remote (${UPSTREAM_URL}): ${(add.stderr || '').trim()}`)
+    }
+    if (add.status === 0) addedUpstream = true
+    const fetch = spawnSync('git', ['fetch', '--depth=1', 'upstream', 'main'], { encoding: 'utf8', timeout: 300000, killSignal: 'SIGKILL' })
+    if (fetch.status !== 0) {
+      throw new Error(`cannot fetch the retained upstream Hydra bundle from ${UPSTREAM_URL}: ` +
+        `git fetch --depth=1 upstream main failed (status=${fetch.status}, stderr=${(fetch.stderr || '').trim()}). ` +
+        'Network access to github.com is required; the sweep fails rather than testing against missing authority.')
+    }
+    return show()
+  }
+}
 try {
   writeFileSync(
     LEGACY_BUNDLE,
-    execFileSync('git', ['show', 'upstream/main:dist/hydra-synth.js'], { encoding: 'utf8' })
+    showUpstreamBundle()
   )
   console.log(`[test] starting http-server on port ${PORT}`)
   server = startServer()
@@ -131,5 +157,7 @@ try {
 } finally {
   if (server) server.kill('SIGTERM')
   rmSync(LEGACY_BUNDLE, { force: true })
+  // Do not leave a test-added upstream remote in the checkout's config.
+  if (addedUpstream) spawnSync('git', ['remote', 'remove', 'upstream'], { encoding: 'utf8' })
 }
 process.exit(exitCode)

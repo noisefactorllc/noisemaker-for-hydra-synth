@@ -96,10 +96,21 @@
         dsl: 'hydraOsc(frequency: 30, sync: 0.2, offset: 0.1)'
       },
       {
+        // Matched-path animated rotation. The legacy side passes a JS
+        // function as the angle, so legacy Hydra also drives the angle through
+        // a per-frame uniform (hydra inlines constant numeric arguments into
+        // the shader, where host compilers such as SwiftShader fold cos/sin
+        // at build time and diverge from their own runtime-trig path by up to
+        // 1 byte — a legacy-internal compiler artifact documented in
+        // workflow-evidence/gap-001/rotate-residual-attribution.json, not an
+        // engine difference). Both sides here evaluate the same runtime
+        // expression angle = 30 + speed*time = 30.25 at t=0.25, through their
+        // respective uniform paths, so the comparison isolates true
+        // animated-parameter parity (byte-exact).
         name: 'rotate_animated_parameter',
         time: 0.25,
-        legacy: hydra => hydra.synth.gradient(0).rotate(30, 0),
-        dsl: 'gradient(speed: 0).rotate(angle: osc(min: 0.2, max: 0.4, speed: 1), speed: 0)'
+        legacy: hydra => hydra.synth.gradient(0).rotate(() => 30, 1),
+        dsl: 'gradient(speed: 0).rotate(angle: osc(min: 0.2, max: 0.4, speed: 1), speed: 1)'
       },
       {
         // Second time point for the time-dependent osc generator: the same
