@@ -145,49 +145,39 @@ async function waitForServer(port, timeoutMs = 30000) {
 }
 
 function runChromeDump(url, port) {
-  // Per-run user data dir: some sandboxed hosts (and concurrent runs) fail
-  // Chrome's default profile container or collide on a shared profile.
-  const profileDir = mkdtempSync(join(tmpdir(), 'ci-gate-chrome-'))
-  // Headless Chrome ignores the *_proxy environment variables; honor them
-  // explicitly so CDN fetches work through a filtering proxy. Chrome
-  // bypasses the proxy for loopback by default, so the local sweep server
-  // is unaffected.
-  const proxy = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy
-  const args = [
-    '--headless', '--no-sandbox',
-    '--user-data-dir=' + profileDir,
-    ...(proxy ? ['--proxy-server=' + proxy] : []),
-    '--window-size=1024,1024',
-    '--hide-scrollbars',
-    '--virtual-time-budget=180000',
-    '--dump-dom', `http://localhost:${port}${url}`
-  ]
+  // Per-dump standalone child (scripts/chrome-dump.mjs): on macOS hosts a
+  // chrome launch inside the long-lived gate process hangs after the unit
+  // suite has already launched chrome (observed twice for 900s each on the
+  // GitHub macos-15 runner, run 36479833520, and reproduced on the macOS
+  // GPU host); the identical flags succeed from a fresh process.
+  const tmp = mkdtempSync(join(tmpdir(), 'ci-gate-dump-'))
+  const out = join(tmp, 'dom.html')
+  const dumpTimeout = 900000
+  // Kill lingering headless chrome from the unit suite first: a leftover
+  // renderer can hold macOS launch services and hang the next launch.
+  if (process.platform === 'darwin') {
+    try { spawnSync('pkill', ['-f', 'Google Chrome.*--headless'], { timeout: 15000 }) } catch (_e) {}
+  }
+  const childArgs = [join(process.cwd(), 'scripts', 'chrome-dump.mjs'), CHROME, `http://localhost:${port}${url}`, String(dumpTimeout), out]
+  const childOpts = { encoding: 'utf8', timeout: dumpTimeout + 120000, killSignal: 'SIGKILL', maxBuffer: 4 * 1024 * 1024 }
+  // One launch retry: a slow host can legitimately exceed one dump window;
+  // the retry is a launch retry, never a parity retry — a real mismatch
+  // still fails.
+  let result = spawnSync(process.execPath, childArgs, childOpts)
+  const childFailed = r => r.status !== 0 || (r.stderr || '').toString().trim() !== '' || r.error
+  if (childFailed(result)) {
+    console.log('[ci-gate] chrome dump timed out or crashed; retrying once (launch retry)')
+    result = spawnSync(process.execPath, childArgs, childOpts)
+  }
   try {
-    // One launch retry: a slow host (proxy-fetched CDN through the sweep
-    // page) can legitimately exceed one dump window; the retry is a launch
-    // retry, never a parity retry — a real mismatch still fails.
-    let result = spawnSync(CHROME, args, { encoding: 'utf8', timeout: 900000, killSignal: 'SIGKILL' })
-    // One launch retry for either a hung dump (ETIMEDOUT) or a crashed dump
-    // (nonzero exit with no DOM output) — macOS runner Chrome has exhibited
-    // both after prior chrome launches in the same process. Launch retries
-    // only, never parity retries: a real mismatch still fails.
-    const crashed = r => r.error && /ETIMEDOUT/.test(r.error.message)
-    const noDom = r => !r.error && r.status !== 0 && r.stdout === ''
-    if (crashed(result) || noDom(result)) {
-      console.log('[ci-gate] chrome dump timed out or crashed; retrying once (launch retry)')
-      result = spawnSync(CHROME, args, { encoding: 'utf8', timeout: 900000, killSignal: 'SIGKILL' })
+    if (childFailed(result)) {
+      throw new Error(`chrome dump failed (exit=${result.status}): ${((result.stderr || '') || (result.error && result.error.message) || '').toString().trim().slice(0, 300)}`)
     }
-    if (result.error) {
-      throw new Error(`chrome launch failed: ${result.error.message}`)
-    }
-    if (result.status !== 0 && result.stdout === '') {
-      throw new Error(`chrome exited ${result.status} with no DOM output (timeout or crash)`)
-    }
-    // No scratch file: the DOM string is returned directly, so no temp dirs
-    // accumulate across runs.
-    return { dom: result.stdout, status: result.status }
+    const dom = readFileSync(out, 'utf8')
+    if (!dom) throw new Error('chrome exited with no DOM output (timeout or crash)')
+    return { dom, status: 0 }
   } finally {
-    rmSync(profileDir, { recursive: true, force: true })
+    rmSync(tmp, { recursive: true, force: true })
   }
 }
 
