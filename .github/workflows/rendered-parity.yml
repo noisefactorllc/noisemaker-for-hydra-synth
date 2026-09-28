@@ -19,7 +19,11 @@ jobs:
           - os: macos-15
             chrome: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 30
+    # 60 min: the macOS leg's strict gate includes the installed-workflow
+    # unit cycle plus two full rendered sweep pages; 30 cancelled it mid-gate
+    # (run 36469100481, macos-15 cancelled inside "Run the strict unit and
+    # rendered gate" while the ubuntu leg completed within budget).
+    timeout-minutes: 60
     env:
       CHROME: ${{ matrix.chrome }}
     steps:
