@@ -153,6 +153,10 @@ jobs:
           echo "CHROME=$CHROME_BIN" >> "$GITHUB_ENV"
           "$CHROME_BIN" --version | tee "$RUNNER_TEMP/chromium-version.txt"
       - name: Run the installed workflow on the older Chromium
+        # shell: bash for pipefail: without it the step's exit status is
+        # tee's (0), so a test failure would still yield a green job and
+        # this run could be misread as minimum-version evidence.
+        shell: bash
         run: |
           mkdir -p "$RUNNER_TEMP/installed-workflow-receipts"
           { echo "platform=$(node -p process.platform)"; echo "chrome=$CHROME"; echo "node=$(node -v)"; cat "$RUNNER_TEMP/chromium-version.txt"; } > "$RUNNER_TEMP/installed-workflow-receipts/identity.log"
