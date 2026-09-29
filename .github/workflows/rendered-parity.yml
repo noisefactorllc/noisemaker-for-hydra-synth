@@ -33,6 +33,24 @@ jobs:
           node-version: '24'
           cache: npm
       - run: npm ci --bin-links=false
+      # Run 36503510015's launch probe proved the runner's Google Chrome
+      # hangs at launch: every headless start first runs the macOS Google
+      # Updater maintenance flow ("UpdaterMain (--wake-all)"), which stalls
+      # for minutes before the browser initializes (60s probe killed
+      # mid-updater; the gate's 900s dump windows are consumed the same
+      # way). Use Playwright's Chromium - updater-free - as the macOS leg's
+      # browser; every parity comparison is same-browser (port vs the
+      # pinned legacy bundle), so the choice of browser cannot mask a
+      # mismatch.
+      - name: Install updater-free Chromium (macOS)
+        if: startsWith(matrix.os, 'macos')
+        shell: bash
+        run: |
+          export PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/pw-browsers"
+          npx -y playwright@1.56.1 install chromium
+          CHROME_BIN=$(find "$RUNNER_TEMP/pw-browsers" -type f -path "*MacOS*" \( -name Chromium -o -name headless_shell \) | head -1)
+          test -x "$CHROME_BIN"
+          echo "CHROME=$CHROME_BIN" >> "$GITHUB_ENV"
       - name: Record source and browser identity
         shell: bash
         run: |
