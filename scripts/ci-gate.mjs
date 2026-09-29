@@ -144,7 +144,7 @@ async function waitForServer(port, timeoutMs = 30000) {
   throw new Error(`Server didn't come up on port ${port}`)
 }
 
-function runChromeDump(url, port) {
+async function runChromeDump(url, port) {
   // Per-dump standalone child (scripts/chrome-dump.mjs): on macOS hosts a
   // chrome launch inside the long-lived gate process hangs after the unit
   // suite has already launched chrome (observed twice for 900s each on the
@@ -152,35 +152,60 @@ function runChromeDump(url, port) {
   // GPU host); the identical flags succeed from a fresh process.
   const tmp = mkdtempSync(join(tmpdir(), 'ci-gate-dump-'))
   const out = join(tmp, 'dom.html')
-  const dumpTimeout = 900000
+  // Hosted macOS arm64 runners are throttled under capacity pressure
+  // (GitHub's own annotation warns about it): identical launches complete
+  // in 1.8s one run and stall beyond 60-900s in another. Long windows plus
+  // one launch retry, with the two sweep pages rendered in parallel, keep
+  // the strict gate inside the job budget on a degraded runner. The window
+  // is env-tunable (GATE_DUMP_TIMEOUT ms).
+  const dumpTimeout = Number(process.env.GATE_DUMP_TIMEOUT || 2400000)
   // Kill lingering headless chrome from the unit suite first: a leftover
   // renderer can hold macOS launch services and hang the next launch.
   if (process.platform === 'darwin') {
-    try { spawnSync('pkill', ['-f', 'Google Chrome.*--headless'], { timeout: 15000 }) } catch (_e) {}
+    try { spawnSync('pkill', ['-f', '(Google Chrome|Chromium|headless_shell).*--headless'], { timeout: 15000 }) } catch (_e) {}
   }
   const childArgs = [join(process.cwd(), 'scripts', 'chrome-dump.mjs'), CHROME, `http://localhost:${port}${url}`, String(dumpTimeout), out]
-  const childOpts = { encoding: 'utf8', timeout: dumpTimeout + 120000, killSignal: 'SIGKILL', maxBuffer: 4 * 1024 * 1024 }
-  // One launch retry: a slow host can legitimately exceed one dump window;
-  // the retry is a launch retry, never a parity retry — a real mismatch
-  // still fails.
-  let result = spawnSync(process.execPath, childArgs, childOpts)
   // Success = exit 0 with a non-empty DOM file (chrome logs to stderr via
   // --enable-logging=stderr even when healthy, so stderr is diagnostic
   // only); failure carries the diagnostic (including chrome's own log
   // tail) on stderr with exit 3.
-  const childFailed = r => r.error || r.status !== 0 || !existsSync(out) || statSync(out).size === 0
-  if (childFailed(result)) {
-    console.log('[ci-gate] chrome dump timed out or crashed; retrying once (launch retry)')
-    result = spawnSync(process.execPath, childArgs, childOpts)
+  const childOk = code => code === 0 && existsSync(out) && statSync(out).size > 0
+  const attempt = () => new Promise(resolve => {
+    const t0 = Date.now()
+    const child = spawn(process.execPath, childArgs, { stdio: ['ignore', 'pipe', 'pipe'] })
+    let stderrText = ''
+    child.stderr.on('data', d => { stderrText += d })
+    const timer = setTimeout(() => {
+      child.kill('SIGKILL')
+      resolve({ ok: false, dom: '', diag: `dump child exceeded ${dumpTimeout + 120000}ms`, elapsed: Date.now() - t0 })
+    }, dumpTimeout + 120000)
+    child.on('error', err => {
+      clearTimeout(timer)
+      resolve({ ok: false, dom: '', diag: err.message, elapsed: Date.now() - t0 })
+    })
+    child.on('exit', code => {
+      clearTimeout(timer)
+      const ok = childOk(code)
+      resolve({
+        ok,
+        dom: ok ? readFileSync(out, 'utf8') : '',
+        diag: ok ? '' : (stderrText.trim().slice(-400) || `exit=${code}`),
+        elapsed: Date.now() - t0
+      })
+    })
+  })
+  // One launch retry: the retry is a launch retry, never a parity retry —
+  // a real mismatch still fails.
+  let result = await attempt()
+  if (!result.ok) {
+    console.log(`[ci-gate] chrome dump failed after ${result.elapsed}ms (${result.diag.slice(0, 120)}); retrying once (launch retry)`)
+    result = await attempt()
   }
   try {
-    if (childFailed(result)) {
-      const diag = ((result.stderr || '') || (result.error && result.error.message) || '').toString().trim()
-      throw new Error(`chrome dump failed (exit=${result.status}): ...${diag.slice(-400)}`)
+    if (!result.ok) {
+      throw new Error(`chrome dump failed: ...${result.diag.slice(-400)}`)
     }
-    const dom = readFileSync(out, 'utf8')
-    if (!dom) throw new Error('chrome exited with no DOM output (timeout or crash)')
-    return { dom, status: 0 }
+    return { dom: result.dom, status: 0, elapsed: result.elapsed }
   } finally {
     rmSync(tmp, { recursive: true, force: true })
   }
@@ -306,15 +331,22 @@ try {
   console.log(`[ci-gate] http-server verified serving on port ${servingPort} (page bytes match the checkout)`)
 
   let allSweepsPassed = true
-  for (const sweepUrl of SWEEP_URLS) {
+  // Both sweep pages render in parallel: on a throttled hosted runner the
+  // wall-clock cost is one page, not two, and a stall in one page's launch
+  // no longer consumes the other page's window. Each page is still
+  // evaluated independently against the full denominator.
+  const sweepResults = await Promise.all(SWEEP_URLS.map(async sweepUrl => {
     console.log(`[ci-gate] pixel-parity: GET ${sweepUrl}`)
-    const { dom, status } = runChromeDump(sweepUrl, servingPort)
+    const { dom, status, elapsed } = await runChromeDump(sweepUrl, servingPort)
+    return { sweepUrl, dom, status, elapsed }
+  }))
+  for (const { sweepUrl, dom, status, elapsed } of sweepResults) {
     if (status !== 0 && status !== null) {
       throw new Error(`chrome dump failed (status=${status})`)
     }
     const summary = parseSummary(dom)
     const { ok, total, fail, failures, perCaseCount } = summary
-    console.log(`[ci-gate] pixel-parity ${sweepUrl}: ${ok}/${total} pass, ${fail} fail (${perCaseCount} per-case lines counted)`)
+    console.log(`[ci-gate] pixel-parity ${sweepUrl}: ${ok}/${total} pass, ${fail} fail (${perCaseCount} per-case lines counted, ${Math.round(elapsed / 1000)}s)`)
     const evaluation = evaluateSweep(summary, TOTAL_CASES)
     for (const reason of evaluation.reasons) console.error(`[ci-gate] FAIL: ${reason}`)
     if (!evaluation.passed) allSweepsPassed = false
