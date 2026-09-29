@@ -42,7 +42,12 @@ const args = [
   '--window-size=1024,1024',
   '--hide-scrollbars',
   '--virtual-time-budget=180000',
-  '--dump-dom', safeUrl
+  '--dump-dom', safeUrl,
+  // Extra launch args from the environment (e.g. HYDRA_GATE_CHROME_ARGS=--disable-gpu
+  // on hosts whose GPU compositor hangs at teardown after a heavy render);
+  // parity comparisons are same-browser, so software rendering cannot mask
+  // a mismatch.
+  ...((process.env.HYDRA_GATE_CHROME_ARGS || '').trim().split(/\s+/).filter(Boolean))
 ]
 let result
 try {
