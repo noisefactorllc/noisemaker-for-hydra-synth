@@ -163,3 +163,34 @@ jobs:
           name: installed-workflow-minimum-version-${{ github.sha }}
           path: ${{ runner.temp }}/installed-workflow-receipts/
           if-no-files-found: error
+
+  # GAP-002 automated continuation: a Safari attempt on a macOS hosted
+  # runner. safaridriver (WebDriver) drives the real Safari against the
+  # checkout's rendered-parity sweep page; a green run is Safari evidence,
+  # a concrete failure is the evidenced automation blocker.
+  installed-workflow-safari:
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --bin-links=false
+      - name: Enable Safari remote automation
+        run: sudo safaridriver --enable
+      - name: Run the rendered-parity sweep in Safari via WebDriver
+        # shell: bash for pipefail: without it the step's exit status is
+        # tee's (0), so a FAIL from safaridrive.mjs would still yield a
+        # green job and a concrete Safari failure could be masked.
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/safari-receipts"
+          node scripts/safaridrive.mjs 2>&1 | tee "$RUNNER_TEMP/safari-receipts/safari-attempt.log"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        if: always()
+        with:
+          name: installed-workflow-safari-${{ github.sha }}
+          path: ${{ runner.temp }}/safari-receipts/
+          if-no-files-found: error
