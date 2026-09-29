@@ -15,10 +15,11 @@
 import assert from 'node:assert/strict'
 import { spawn, spawnSync, execFileSync } from 'node:child_process'
 import { createHash } from 'node:crypto'
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { accessSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { dirname } from 'node:path'
 import test from 'node:test'
 import { BUNDLE_PAGE_BODY, MODULE_PAGE_BODY, encodeTestPng, pageHtml, parseDomSummary } from './installed-workflow-page.mjs'
 
@@ -46,7 +47,22 @@ function freePort() {
   })
 }
 
+// Windows-safe npm invocation: Node refuses to spawn npm.cmd without a
+// shell (EINVAL), and shell-quoting args with spaces is unsafe on cmd, so
+// call npm's JS entrypoint through node directly - shell-free on every
+// platform. Resolve the entrypoint from npm_execpath (set when this test
+// itself runs under npm) or the node distribution's bundled npm; if neither
+// exists, fall back to the plain npm command (Linux/macOS).
+const npmCliCandidates = [
+  process.env.npm_execpath,
+  join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')
+].filter(Boolean)
+const npmCli = npmCliCandidates.find(p => { try { accessSync(p) } catch (_e) { return false } return true })
+
 function run(cmd, args, opts = {}) {
+  if (cmd === 'npm' && npmCli) {
+    return execFileSync(process.execPath, [npmCli, ...args], { encoding: 'utf8', ...opts })
+  }
   return execFileSync(cmd, args, { encoding: 'utf8', ...opts })
 }
 

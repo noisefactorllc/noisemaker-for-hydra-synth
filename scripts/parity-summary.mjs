@@ -13,7 +13,8 @@
  *   PARITY-SUMMARY {"expected":N,"executed":N,"exact":N,"strict":N,"near":N,"defer":N,"skip":N,"fail":N,"missing":N}
  *
  * expected  cases the authority must render for the requested ids
- *           (71 cases x 2 size sweeps without arguments, or 2 per given id);
+ *           (the authority manifest size per size sweep - TOTAL_CASES from
+ *           the strict gate - or 2 per given id);
  * executed  per-case lines actually counted (ok + FAIL/THROW);
  * exact     byte-identical passes; strict/near/defer/skip are 0 because the
  *           port's published numerical contract is byte-exact with no
@@ -29,7 +30,7 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { parseSummary } from './ci-gate.mjs'
+import { parseSummary, TOTAL_CASES } from './ci-gate.mjs'
 import { LEGACY_BUNDLE, cleanupScratchBundle, materializeLegacyBundle } from './upstream-bundle.mjs'
 
 const CHROME = process.env.CHROME ||
@@ -42,7 +43,6 @@ process.on('SIGTERM', () => { cleanupScratchBundle(); process.exit(143) })
 process.on('exit', cleanupScratchBundle)
 const SWEEP_URL = '/dev-noisemaker/pixel-parity.html'
 const SWEEP_URLS = [SWEEP_URL, `${SWEEP_URL}?w=96&h=48`]
-const CASES_PER_SWEEP = 71
 
 function startServer(port) {
   return spawn(process.execPath,
@@ -137,6 +137,13 @@ try {
   console.log(`[parity-summary] http-server verified serving on port ${servingPort} (page bytes match the checkout)`)
 
   const counted = new Map()
+  // Denominator: the statically knowable authority manifest size
+  // (TOTAL_CASES per sweep, exported by the strict gate as the single
+  // source), NOT the page's self-reported summary total - the marker's
+  // total is the executed count, so deriving from it would make the
+  // denominator self-referential and re-allow silent case skips. A silent
+  // skip shows up as executed < expected (missing > 0) and fails.
+  const authorityTotals = []
   // Case-scoped rendering: with ids, each sweep URL carries the page's
   // `cases` query parameter so the page renders ONLY the requested cases;
   // without ids the complete suite renders (the default, unchanged).
@@ -148,6 +155,7 @@ try {
     const dom = runChromeDump(sweepUrl, servingPort)
     const summary = parseSummary(dom)
     if (summary.ok === null) throw new Error('no summary line — the sweep did not report results')
+    authorityTotals.push(summary.total)
     for (const name of summary.okLines) {
       counted.set(name, (counted.get(name) || { exact: 0, fail: 0 }))
       counted.get(name).exact++
@@ -160,7 +168,26 @@ try {
     console.log(`[parity-summary] ${sweepUrl}: ${summary.ok} ok, ${summary.fail} fail (${summary.perCaseCount} per-case lines)`)
   }
 
-  const expected = (requestedIds.length > 0 ? requestedIds.length : CASES_PER_SWEEP) * 2
+  // With ids the page renders exactly the requested cases, so the expected
+  // count is the requested id count per sweep size. Without ids the
+  // expected count is the authority manifest's size per sweep (TOTAL_CASES,
+  // the strict gate's exported denominator); the page's summary total is
+  // additionally cross-checked against it so a misreported or silently
+  // skipped manifest fails.
+  let expected
+  if (requestedIds.length > 0) {
+    expected = requestedIds.length * 2
+  } else {
+    if (authorityTotals.length !== SWEEP_URLS.length) {
+      throw new Error('a sweep produced no summary - cannot verify the authority scope')
+    }
+    for (const t of authorityTotals) {
+      if (t !== TOTAL_CASES) {
+        throw new Error(`sweep summary total ${t} != authority manifest ${TOTAL_CASES} - refusing a self-referential denominator`)
+      }
+    }
+    expected = TOTAL_CASES * SWEEP_URLS.length
+  }
   let executed = 0
   let exact = 0
   let fail = 0

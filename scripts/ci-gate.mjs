@@ -84,6 +84,7 @@ let addedUpstream = false
 // `parameter_matrix_combine_t075`) were added on top of the original
 // generated fixtures. Denominator is 71 per sweep.
 const TOTAL_CASES = 71
+export { TOTAL_CASES }
 
 function startServer(port) {
   // Installs use --bin-links=false, so no http-server binary exists; run it
