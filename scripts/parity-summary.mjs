@@ -137,23 +137,25 @@ try {
   console.log(`[parity-summary] http-server verified serving on port ${servingPort} (page bytes match the checkout)`)
 
   const counted = new Map()
-  for (const sweepUrl of SWEEP_URLS) {
+  // Case-scoped rendering: with ids, each sweep URL carries the page's
+  // `cases` query parameter so the page renders ONLY the requested cases;
+  // without ids the complete suite renders (the default, unchanged).
+  const urls = requestedIds.length > 0
+    ? SWEEP_URLS.map(u => `${u}${u.includes('?') ? '&' : '?'}cases=${requestedIds.join(',')}`)
+    : SWEEP_URLS
+  for (const sweepUrl of urls) {
     console.log(`[parity-summary] sweep: GET ${sweepUrl}`)
     const dom = runChromeDump(sweepUrl, servingPort)
     const summary = parseSummary(dom)
     if (summary.ok === null) throw new Error('no summary line — the sweep did not report results')
     for (const name of summary.okLines) {
-      if (requestedIds.length === 0 || requestedIds.includes(name)) {
-        counted.set(name, (counted.get(name) || { exact: 0, fail: 0 }))
-        counted.get(name).exact++
-      }
+      counted.set(name, (counted.get(name) || { exact: 0, fail: 0 }))
+      counted.get(name).exact++
     }
     for (const failure of summary.failures) {
       const name = failure.split(/\s+/)[0]
-      if (requestedIds.length === 0 || requestedIds.includes(name)) {
-        counted.set(name, (counted.get(name) || { exact: 0, fail: 0 }))
-        counted.get(name).fail++
-      }
+      counted.set(name, (counted.get(name) || { exact: 0, fail: 0 }))
+      counted.get(name).fail++
     }
     console.log(`[parity-summary] ${sweepUrl}: ${summary.ok} ok, ${summary.fail} fail (${summary.perCaseCount} per-case lines)`)
   }

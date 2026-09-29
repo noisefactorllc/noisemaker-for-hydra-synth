@@ -416,6 +416,13 @@
         canvas.height = H
       }
       emit(`size ${W}x${H}`)
+      // Case-scoped rendering: a `cases` query parameter (comma-separated
+      // names) limits the page to exactly those cases, so the parity-summary
+      // entrypoint renders only the requested cases; the default (no
+      // parameter) runs the complete suite unchanged.
+      const CASES_PARAM = new URLSearchParams(location.search).get('cases')
+      const WANTED = CASES_PARAM ? new Set(CASES_PARAM.split(',').map(s => s.trim()).filter(Boolean)) : null
+      const want = name => !WANTED || WANTED.has(name)
       const legacy = createLegacy(legacyCanvas)
       const noisemakerEngine = await loadEngine()
       const nativeCompile = noisemakerEngine.CanvasRenderer.prototype.compile
@@ -424,6 +431,7 @@
       let fail = 0
 
       for (const fixture of FIXTURES) {
+        if (!want(fixture.name)) continue
         const expected = fixture.reference ? referencePixels(fixture) : renderLegacy(legacy, legacyCanvas, fixture)
         const actual = await renderPorted(ported, portedCanvas, fixture)
         const result = compare(actual, expected)
@@ -449,6 +457,7 @@
           dsl: 'prev().write(o0)'
         }
       ]) {
+        if (!want(transition.name)) continue
         await ported.compile(`search synth\nperlin().write(${transition.surface})`)
         ported.pipeline.graph.renderSurface = transition.surface
         ported.pipeline.globalUniforms.time = 0
@@ -472,6 +481,7 @@
         }
       }
 
+      if (want('hydra_to_native_read_surface')) {
       await ported.compile('search hydra\ngradient(speed: 0).write(o1)')
       ported.pipeline.graph.renderSurface = 'o1'
       ported.pipeline.globalUniforms.time = 0
@@ -493,7 +503,9 @@
         emit(`FAIL  hydra_to_native_read_surface  →  ${hydraToNativeResult.differingBytes}/${hydraToNativeResult.totalBytes} bytes differ; max delta ${hydraToNativeResult.maxDelta}; samples ${JSON.stringify(hydraToNativeResult.samples)}`)
         fail++
       }
+      }
 
+      if (want('hydra_to_native_prev_feedback')) {
       await ported.loadEffects(['filter/invert'])
       await ported.compile('search hydra\ngradient(speed: 0).write(o0)')
       ported.pipeline.graph.renderSurface = 'o0'
@@ -516,7 +528,9 @@
         emit(`FAIL  hydra_to_native_prev_feedback  →  ${mixedPrevResult.differingBytes}/${mixedPrevResult.totalBytes} bytes differ; max delta ${mixedPrevResult.maxDelta}; samples ${JSON.stringify(mixedPrevResult.samples)}`)
         fail++
       }
+      }
 
+      if (want('noisemaker_native_control')) {
       const nativeReference = await createRenderer(nativeReferenceCanvas, noisemakerEngine)
       const nativeInterface = await createRenderer(nativeInterfaceCanvas, noisemakerEngine)
       const expectedNative = await renderNativeControl(
@@ -536,6 +550,7 @@
       } else {
         emit(`FAIL  noisemaker_native_control  →  ${nativeResult.differingBytes}/${nativeResult.totalBytes} bytes differ; max delta ${nativeResult.maxDelta}; samples ${JSON.stringify(nativeResult.samples)}`)
         fail++
+      }
       }
 
       emit(`=== ${ok} ok, ${fail} fail / ${ok + fail} total ===`)
