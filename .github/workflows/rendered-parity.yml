@@ -50,7 +50,24 @@ jobs:
         run: |
           export PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/pw-browsers"
           npx -y playwright@1.56.1 install chromium
-          CHROME_BIN=$(find "$RUNNER_TEMP/pw-browsers" -type f -path "*MacOS*" \( -name Chromium -o -name headless_shell \) | head -1)
+          # Prefer the headless shell: it is the dedicated headless dump
+          # browser and the only macOS browser verified to complete the
+          # strict gate end to end (macOS GPU host: unit 54/0, both size
+          # sweeps 71/71 exact, exit 0, with and without --disable-gpu).
+          # The full Chromium build printed the complete DOM and then never
+          # exited on this runner, and with --disable-gpu (which Chrome 141+
+          # needs --enable-unsafe-swiftshader for) its page aborted at the
+          # first fixture (run 36530335846: 0/67, THROW at parity_fixture).
+          # GPU rendering is kept (run 36531903789: page 1 passed 71/71 with
+          # the GPU here); the kill-after-marker dump acceptance handles the
+          # non-exiting process. Playwright installs the shell as
+          # chromium_headless_shell-*/chrome-headless-shell-mac-arm64/
+          # chrome-headless-shell (binary name chrome-headless-shell, no
+          # MacOS path component); the full build is the fallback.
+          CHROME_BIN=$(find "$RUNNER_TEMP/pw-browsers" -type f -name 'chrome-headless-shell' | head -1)
+          if [ -z "$CHROME_BIN" ]; then
+            CHROME_BIN=$(find "$RUNNER_TEMP/pw-browsers" -type f -path "*MacOS*" -name Chromium | head -1)
+          fi
           test -x "$CHROME_BIN"
           echo "CHROME=$CHROME_BIN" >> "$GITHUB_ENV"
       - name: Record source and browser identity

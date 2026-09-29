@@ -348,6 +348,10 @@ try {
     const { ok, total, fail, failures, perCaseCount } = summary
     console.log(`[ci-gate] pixel-parity ${sweepUrl}: ${ok}/${total} pass, ${fail} fail (${perCaseCount} per-case lines counted, ${Math.round(elapsed / 1000)}s)`)
     const evaluation = evaluateSweep(summary, TOTAL_CASES)
+    // Surface each failing per-case line verbatim (THROW/FAIL text) so a
+    // failing run's root cause is readable from the gate log itself, not
+    // only inside the combined mismatch reason.
+    for (const failure of failures) console.error(`[ci-gate] FAIL line: ${failure.slice(0, 380)}`)
     for (const reason of evaluation.reasons) console.error(`[ci-gate] FAIL: ${reason}`)
     if (!evaluation.passed) allSweepsPassed = false
   }
