@@ -1,0 +1,6 @@
+#!/bin/sh
+# Executable wrapper for the machine-checkable parity summary entrypoint
+# (scripts/parity-summary.mjs). The rendered-parity closure contract runs
+# the executable scripts/parity-summary with the case ids to count as
+# arguments; see docs/COMPLETION_GAPS.md GAP-001.
+exec node "$(dirname "$0")/parity-summary.mjs" "$@"
