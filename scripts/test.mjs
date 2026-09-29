@@ -9,7 +9,7 @@
  */
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { cleanupScratchBundle, LEGACY_BUNDLE, materializeLegacyBundle } from './upstream-bundle.mjs'
-import { accessSync, constants, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs'
+import { accessSync, constants, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -92,50 +92,41 @@ async function waitForServer(timeoutMs = 5000) {
 }
 
 function runChromeDump(url) {
-  // Per-run user data dir: some sandboxed hosts (and concurrent runs) fail
-  // Chrome's default profile container or collide on a shared profile.
+  // Per-dump standalone child (scripts/chrome-dump.mjs), the same entrypoint
+  // the strict gate uses: fresh profile dir per dump, mock keychain on macOS,
+  // CDN-through-proxy with loopback bypass, and a DOM-complete acceptance — on macOS hosts
+  // full-browser builds print the complete DOM (sweep summary included) and
+  // then never exit, so the dump is accepted on the summary marker instead of
+  // the process exit (see scripts/chrome-dump.mjs). One launch retry: a slow
+  // host can legitimately exceed one dump window; the retry is a launch
+  // retry, never a parity retry — a real mismatch still fails. Dump window
+  // is env-tunable (HOST-DELEGATED runs use a larger window within the
+  // broker's cap).
   const scratchRoot = process.env.HOST_SCRATCH || tmpdir()
   mkdirSync(scratchRoot, { recursive: true })
   const tmp = mkdtempSync(join(scratchRoot, 'hydra-test-'))
   const out = join(tmp, 'dom.html')
-  // Per-run user data dir: some sandboxed hosts (and concurrent runs) fail
-  // Chrome's default profile container or collide on a shared profile.
-  const profileDir = mkdtempSync(join(tmpdir(), 'hydra-test-profile-'))
-  // Headless Chrome ignores the *_proxy environment variables; honor them
-  // explicitly so CDN fetches work through a filtering proxy. Chrome
-  // bypasses the proxy for loopback by default, so the local sweep server
-  // is unaffected.
-  const proxy = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy
-  const args = [
-    '--headless', '--no-sandbox',
-    ...(process.env.HYDRA_TEST_CHROME_ARGS ? process.env.HYDRA_TEST_CHROME_ARGS.split(' ') : []),
-    '--user-data-dir=' + profileDir,
-    ...(proxy ? ['--proxy-server=' + proxy] : []),
-    '--window-size=1024,1024',
-    '--hide-scrollbars',
-    '--virtual-time-budget=180000',
-    '--dump-dom', `http://localhost:${PORT}${url}`
-  ]
-  let result
+  const dumpTimeout = Number(process.env.HYDRA_TEST_DUMP_TIMEOUT) || 900000
+  const childArgs = [join(process.cwd(), 'scripts', 'chrome-dump.mjs'), CHROME,
+    `http://localhost:${PORT}${url}`, String(dumpTimeout), out,
+    process.env.HYDRA_TEST_CHROME_ARGS || '']
+  const childOpts = { encoding: 'utf8', timeout: dumpTimeout + 120000, killSignal: 'SIGKILL' }
   try {
-    // 900s with one launch retry: the sweep pages render 71 cases each and,
-    // on proxy-sandboxed hosts, a single dump can legitimately take longer
-    // than a fast local run. The retry is a launch retry, never a parity
-    // retry — a real mismatch still fails.
-    // Dump window is env-tunable (HOST-DELEGATED runs use a larger window
-    // within the broker's cap); one launch retry, never a parity retry —
-    // a real mismatch still fails.
-    const dumpTimeout = Number(process.env.HYDRA_TEST_DUMP_TIMEOUT) || 900000
-    result = spawnSync(CHROME, args, { encoding: 'utf8', timeout: dumpTimeout, killSignal: 'SIGKILL' })
-    if (result.error && /ETIMEDOUT/.test(result.error.message)) {
-      console.log('[test] chrome dump timed out; retrying once (launch retry)')
-      result = spawnSync(CHROME, args, { encoding: 'utf8', timeout: dumpTimeout, killSignal: 'SIGKILL' })
+    let result = spawnSync(process.execPath, childArgs, childOpts)
+    const childFailed = r => r.status !== 0 || (r.stderr || '').toString().trim() !== '' || r.error
+    if (childFailed(result)) {
+      console.log('[test] chrome dump timed out or crashed; retrying once (launch retry)')
+      result = spawnSync(process.execPath, childArgs, childOpts)
     }
+    if (childFailed(result)) {
+      throw new Error(`chrome dump failed (exit=${result.status}): ${((result.stderr || '') || (result.error && result.error.message) || '').toString().trim().slice(0, 300)}`)
+    }
+    const dom = readFileSync(out, 'utf8')
+    if (!dom) throw new Error('chrome exited with no DOM output (timeout or crash)')
+    return dom
   } finally {
-    rmSync(profileDir, { recursive: true, force: true })
+    rmSync(tmp, { recursive: true, force: true })
   }
-  writeFileSync(out, result.stdout)
-  return result.stdout
 }
 
 function parseSummary(domText) {
