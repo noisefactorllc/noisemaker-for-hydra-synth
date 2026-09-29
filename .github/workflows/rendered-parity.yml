@@ -19,13 +19,13 @@ jobs:
           - os: macos-15
             chrome: /Applications/Google Chrome.app/Contents/MacOS/Google Chrome
     runs-on: ${{ matrix.os }}
-    # 75 min: the macOS leg's strict gate includes the installed-workflow
-    # unit cycle plus the two rendered sweep pages, now rendered in
-    # parallel with env-tunable 2400s windows plus one launch retry each
-    # (hosted macOS arm64 runners are throttled under capacity pressure;
-    # run 36511129263 showed identical launches spanning 1.8s to beyond
-    # 60-900s).
-    timeout-minutes: 75
+    # 120 min: the macOS leg's strict gate includes the installed-workflow
+    # unit cycle (~20 min on the runner) plus the two rendered sweep pages
+    # in parallel, each with an env-tunable 2400s window plus one launch
+    # retry (worst case ~80 min) - hosted macOS arm64 runners are throttled
+    # under capacity pressure, and run 36515359476 exhausted the 75-minute
+    # budget mid-gate.
+    timeout-minutes: 120
     env:
       CHROME: ${{ matrix.chrome }}
     steps:
