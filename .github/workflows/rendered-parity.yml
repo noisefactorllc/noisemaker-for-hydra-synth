@@ -137,8 +137,6 @@ jobs:
   installed-workflow-minimum-version:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
-    env:
-      PLAYWRIGHT_BROWSERS_PATH: ${{ runner.temp }}/pw-min
     steps:
       - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
@@ -148,6 +146,7 @@ jobs:
       - run: npm ci --bin-links=false
       - name: Install an older Chromium as the minimum-version probe
         run: |
+          export PLAYWRIGHT_BROWSERS_PATH="$RUNNER_TEMP/pw-min"
           npx -y playwright@1.47.2 install chromium
           CHROME_BIN=$(find "$RUNNER_TEMP/pw-min" -type f -name chrome -path "*chrome-linux*" | head -1)
           test -x "$CHROME_BIN"
