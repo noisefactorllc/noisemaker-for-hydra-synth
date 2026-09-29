@@ -51,7 +51,9 @@ async function driverFetch(method, path, body) {
   return data.value
 }
 
-const driver = spawn('safaridriver', ['-p', String(DRIVER_PORT), '--verbose'], { stdio: ['ignore', 'ignore', 'pipe'] })
+// No --verbose: some safaridriver builds reject that option and exit
+// immediately, which would kill the session before it starts.
+const driver = spawn('safaridriver', ['-p', String(DRIVER_PORT)], { stdio: ['ignore', 'ignore', 'pipe'] })
 let stderr = ''
 driver.stderr.on('data', d => { stderr += d })
 const { addedUpstream } = materializeLegacyBundle('[safari]')
