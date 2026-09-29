@@ -53,13 +53,6 @@ jobs:
           CHROME_BIN=$(find "$RUNNER_TEMP/pw-browsers" -type f -path "*MacOS*" \( -name Chromium -o -name headless_shell \) | head -1)
           test -x "$CHROME_BIN"
           echo "CHROME=$CHROME_BIN" >> "$GITHUB_ENV"
-          # Page 1 passed but page 2's launch hung twice for 900s with GPU
-          # compositor teardown errors in chromium's stderr ("SharedImageManager
-          # ::ProduceOverlay ... non-existent mailbox") - the runner VM's GPU
-          # compositor hangs after a heavy render. Force software rendering
-          # for the gate's dumps; the ubuntu leg already passes the full sweep
-          # in software.
-          echo "HYDRA_GATE_CHROME_ARGS=--disable-gpu" >> "$GITHUB_ENV"
       - name: Record source and browser identity
         shell: bash
         run: |
@@ -86,25 +79,6 @@ jobs:
           tail -c 6000 "$RUNNER_TEMP/parity-receipts/gate.log" | grep -E "\[ci-gate\]|\[test\]|Error|error:" | tail -20 | while IFS= read -r line; do
             echo "::error::${line:0:300}"
           done
-      # Decisive launch-level diagnostic: on macOS the gate's dump child
-      # hangs with an EMPTY stderr (chrome never initializes logging), while
-      # the unit suite's identical chrome launches succeed moments earlier.
-      # This step runs the same launch against a trivial URL with a short
-      # window and surfaces status/stdout/stderr as annotations.
-      - name: Diagnose chrome launch (macOS)
-        if: failure() && startsWith(matrix.os, 'macos')
-        shell: bash
-        run: |
-          node -e '
-            const { spawnSync } = require("node:child_process")
-            const { mkdtempSync } = require("node:fs")
-            const { tmpdir } = require("node:os")
-            const { join } = require("node:path")
-            const t0 = Date.now()
-            const r = spawnSync(process.env.CHROME, ["--headless","--no-sandbox","--use-mock-keychain","--user-data-dir=" + mkdtempSync(join(tmpdir(), "diag-chrome-")),"--enable-logging=stderr","--virtual-time-budget=5000","--dump-dom","http://127.0.0.1:9/x"], { encoding: "utf8", timeout: 60000 })
-            const out = ["LAUNCH-PROBE elapsed_ms=" + (Date.now() - t0), "status=" + r.status, "error=" + (r.error && r.error.code), "stdout_len=" + (r.stdout || "").length, "stderr_tail=" + ((r.stderr || "").trim().slice(-600).replace(/\n/g, " | "))]
-            for (const line of out) console.log("::error::" + line.slice(0, 290))
-          ' || true
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
