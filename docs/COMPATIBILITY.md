@@ -82,11 +82,11 @@ Full parity: **unverified**. Release readiness: **blocked**. This report records
 The engine core SHA-256 is `0216b69e800bc5dd5cae33ba5df8d957f9b9ce4c625193e3068889305592f657`.
 The current Hydra bundle SHA-256 is `b4881aa9dfbd990a9e37fe6766581816fc273cdd42471e13bf6e79b705a5a7a1`.
 Rolling and immutable engine core bytes match. The immutable run records all six requested dependency responses and their hashes.
-[Artifact identity](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/authority-artifacts.json). [Engine source difference](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/engine-current-delta.json). [Hydra source difference](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/hydra-authority.diff).
+Artifact identity (retained evidence: authority-artifacts.json). Engine source difference (retained evidence: engine-current-delta.json). Hydra source difference (retained evidence: hydra-authority.diff).
 
 The native Noisemaker manifest contains 210 IDs. These do not define this extension's Hydra denominator.
 Current Hydra definitions contain 52 effects. The port registers all 52; `sum` carries the fixed body corroborated against the pinned Hydra authority commit `9d29a9f4fd8f9081b9759943f38db36f05b9a88f` ([verbatim entry](../workflow-evidence/gap-001/current-hydra-sum-source.txt)).
-[Current inventory](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/coverage-inventory.json). Every later runtime, packaging, or authority change requires fresh evidence.
+Current inventory (retained evidence: coverage-inventory.json). Every later runtime, packaging, or authority change requires fresh evidence.
 
 ## 2. Host and distribution matrix
 
@@ -118,13 +118,13 @@ The matrix below retains the earlier measured scope. A historical verified row i
 
 This module provides no editor controls. Keyboard, focus, and control-label checks do not apply to its public API.
 The packed HTML example was runtime-checked 2026-09-26 (canvas, changing output, zero page errors; [evidence](../workflow-evidence/gap-004/packed-html-verification.json)). Browser modules do not require desktop signing or notarization.
-[Installed observations](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/installed-browser.json). [Failures and lifecycle calls](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/distribution-and-recovery.json). [Package verification](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/artifact-verification.json).
+Installed observations (retained evidence: installed-browser.json). Failures and lifecycle calls (retained evidence: distribution-and-recovery.json). Package verification (retained evidence: artifact-verification.json).
 
 ## 3. Parity coverage
 
 ### Daily review, 2026-09-25
 
-37 unit tests pass. The existing browser suite renders 58 cases and reports 58 passes with zero failures against its retained upstream Hydra bundle. That gate does not pin the current Noisemaker authority or qualify the whole catalog. The packed HTML still calls the removed Hydra constructor. GAP-004 remains open. [Raw evidence](/Users/alex/.codex/automations/noisemaker-port-completion-audit/review-20260925-053200/hydra-synth-browser-tests.json).
+37 unit tests pass. The existing browser suite renders 58 cases and reports 58 passes with zero failures against its retained upstream Hydra bundle. That gate does not pin the current Noisemaker authority or qualify the whole catalog. The packed HTML still calls the removed Hydra constructor. GAP-004 remains open. Raw evidence (retained evidence: hydra-synth-browser-tests.json).
 
 The current full case denominator remains incomplete. Missing parameters, hosts, external inputs, and stateful sequences remain qualification gaps. No skip or tolerated difference counts as exact parity.
 
@@ -154,7 +154,7 @@ The 2026-09-27 candidate routes the sweep through two canvas sizes (64×64 and 9
 `sum` was never a legacy sweep case: `isExecutableHydraEffect()` excluded it before this candidate, and the published authority bundle's `sum` shader cannot compile (its body references an undefined `s`), so `sum` still has no legacy-side pixel comparison. `isExecutableHydraEffect()` no longer excludes `sum` from registration; `sum` carries the fixed body from current Hydra source and is qualified by the formula comparison.
 The independent IDs are `solid_rgba`, `osc_time07`, `shape_rotate`, and `gradient_blend`.
 The failed backend probe is `webgpu:hydraOsc`.
-All existing fixture IDs and input definitions remain in [the coverage inventory](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/coverage-inventory.json).
+All existing fixture IDs and input definitions remain in the coverage inventory (retained evidence: coverage-inventory.json).
 
 Current Hydra source changes only `sum` relative to retained definitions. Its committed distribution bundle still matches the retained bundle.
 Therefore, a green comparison against that bundle cannot prove current source behavior for `sum`; the 2026-09-26 candidate adopts the fixed current-source body and qualifies it by the `sum_reference` formula comparison instead.
@@ -162,28 +162,28 @@ The 2026-09-26 GAP-001 candidate changed fixtures and implementation (sum reconc
 
 ## 4. Evidence
 
-Review CI boundary: No workflow run exists at the inspected source SHA. A passing export dispatch does not qualify rendered parity. Current complete-render enforcement remains an open verification requirement. [Exact-source responses and workflows](/Users/alex/.codex/automations/noisemaker-port-completion-audit/review-20260925-053200/noisemaker-for-hydra-synth-remote-evidence.json).
+Review CI boundary: No workflow run exists at the inspected source SHA. A passing export dispatch does not qualify rendered parity. Current complete-render enforcement remains an open verification requirement. Exact-source responses and workflows (retained evidence: noisemaker-for-hydra-synth-remote-evidence.json).
 
-The current distribution HTML independently produces `Hydra is not defined` and zero canvases in Chrome. [Probe](/Users/alex/.codex/automations/noisemaker-port-completion-audit/review-20260925-053200/hydra-synth-html-current.json).
+The current distribution HTML independently produces `Hydra is not defined` and zero canvases in Chrome. Probe (retained evidence: hydra-synth-html-current.json).
 
 | Command or check | Exit or outcome | Evidence |
 |---|---|---|
-| `npm test` | 0 | [31 unit and 58 render results](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/npm-test.json), [raw DOM](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/npm-test-dom.html) |
-| Existing HTML suite with immutable routing | 58/58 exact | [Log, runtime, and asset hashes](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/immutable-parity.json) |
-| Installed nondefault differential probes | 4/4 exact | [Inputs and RGBA hashes](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/independent-differential.json) |
-| `npm pack --json --pack-destination <evidence-directory>` | 0 | [28-file inventory](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/pack.json) |
-| `npm install --ignore-scripts --bin-links=false --no-audit --no-fund <tarball>` | 0 | [Install log](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/install.json) |
-| Installed module and README workflow | Useful output and recovery | [Browser result](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/installed-browser.json), [output screenshot](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/installed-output.png) |
-| Installed HTML, sum, and WebGPU probes | Explicit failures | [Raw diagnostics](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/distribution-and-recovery.json) |
-| `npm run build` in installed candidate | 0, four matching bundles | [Reproduction](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/build-reproduction.json) |
-| `npm uninstall --ignore-scripts --bin-links=false --no-audit --no-fund noisemaker-for-hydra-synth` | 0, package absent | [Removal log](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/removal.json) |
+| `npm test` | 0 | 31 unit and 58 render results (retained evidence: npm-test.json), raw DOM (retained evidence: npm-test-dom.html) |
+| Existing HTML suite with immutable routing | 58/58 exact | Log, runtime, and asset hashes (retained evidence: immutable-parity.json) |
+| Installed nondefault differential probes | 4/4 exact | Inputs and RGBA hashes (retained evidence: independent-differential.json) |
+| `npm pack --json --pack-destination <evidence-directory>` | 0 | 28-file inventory (retained evidence: pack.json) |
+| `npm install --ignore-scripts --bin-links=false --no-audit --no-fund <tarball>` | 0 | Install log (retained evidence: install.json) |
+| Installed module and README workflow | Useful output and recovery | Browser result (retained evidence: installed-browser.json), output screenshot (retained evidence: installed-output.png) |
+| Installed HTML, sum, and WebGPU probes | Explicit failures | Raw diagnostics (retained evidence: distribution-and-recovery.json) |
+| `npm run build` in installed candidate | 0, four matching bundles | Reproduction (retained evidence: build-reproduction.json) |
+| `npm uninstall --ignore-scripts --bin-links=false --no-audit --no-fund noisemaker-for-hydra-synth` | 0, package absent | Removal log (retained evidence: removal.json) |
 | `node --test test/installed-workflow.test.mjs` | 0, pack + isolated install + 11 + 1 installed checks + reinstall + removal + file preservation | [Installed workflow evidence](../workflow-evidence/gap-002/installed-workflow.json) |
 | `CHROME=/usr/bin/chromium PORT=8765 node scripts/test.mjs` | 57 exact, 1 known host residual (96/16,384, max delta 1, matches the retained 9e7520b receipt) | [Installed workflow evidence](../workflow-evidence/gap-002/installed-workflow.json) |
-| `gh api repos/noisefactorllc/noisemaker-for-hydra-synth/actions/workflows` | 0, zero workflows | [GitHub preflight](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/preflight.json) |
-| `npm view noisemaker-for-hydra-synth version dist --json` | 1, E404 | [Registry response](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/registry.json) |
+| `gh api repos/noisefactorllc/noisemaker-for-hydra-synth/actions/workflows` | 0, zero workflows | GitHub preflight (retained evidence: preflight.json) |
+| `npm view noisemaker-for-hydra-synth version dist --json` | 1, E404 | Registry response (retained evidence: registry.json) |
 
 The suite uses 16,384 channels per image. Independent probes use 12,288 channels per image.
-Actual and reference RGBA files accompany the independent results. All tracked files retain source hashes in [the source inventory](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/source-hashes-before.json).
+Actual and reference RGBA files accompany the independent results. All tracked files retain source hashes in the source inventory (retained evidence: source-hashes-before.json).
 The initial Python fetch failed local certificate trust. Curl succeeded with certificate validation enabled.
 Initial resize sampling omitted the caller's canvas update. The corrected observation changes both canvas and pipeline dimensions.
 The raw failed attempts remain visible. Neither probe limitation counts as a product defect.
@@ -210,7 +210,7 @@ The implementation job owns corrections. This audit does not advance the parity 
 
 ## 6. History
 
-2026-09-25 daily review at `073f16d2c94140c55433e6beeb3d76f372b93700`: source freshness and bounded evidence reviewed. Open qualification limits retained. [Retained review evidence](/Users/alex/.codex/automations/noisemaker-port-completion-audit/review-20260925-053200/hydra-synth-browser-tests.json). No new closure claimed.
+2026-09-25 daily review at `073f16d2c94140c55433e6beeb3d76f372b93700`: source freshness and bounded evidence reviewed. Open qualification limits retained. Retained review evidence (retained evidence: hydra-synth-browser-tests.json). No new closure claimed.
 
 | Date | Source | Result | Change |
 |---|---|---|---|
@@ -222,6 +222,6 @@ The implementation job owns corrections. This audit does not advance the parity 
 | 2026-09-26, GAP-001 sum reconciliation and sweep extension | Containing commit | `sum` reconciled to current Hydra source and registered (`isExecutableHydraEffect` no longer excludes it); dist bundles rebuilt. Sweep extended from 58 to 62 cases by adding `parameter_matrix` (noise → posterize → shift at non-default parameters, time 0.25, exact), `parameter_matrix_color` (contrast → hue → saturate at time 0.1, exact), `sum_reference` (port vs documented formula with explicit array-literal scale, 16,384/16,384 bytes exact) and `sum_default_scale` (the vec4 default `[1, 1, 1, 1]` resolved through the DSL, exact); no existing case was replaced or removed. `sum` had no legacy sweep case before (it was excluded from the generated fixtures), and the published authority bundle's `sum` body references an undefined `s` and cannot compile, so it still has no legacy-side pixel comparison — recorded in the sweep source. Receipts with exit codes: `node --test test/*.test.mjs` exit 0 — 52 pass, 0 fail; `npm run build` exit 0 (bundle SHA-256s in the machine receipt); `CHROME=/usr/bin/chromium node scripts/test.mjs` exit 1 by design — 61 ok, 1 documented residual (`rotate_animated_parameter`, 96/16,384 bytes, max delta 1, unchanged), expected >= 62; the harness records the Chrome binary provenance (`[test] using Chrome binary: /usr/bin/chromium`) and an explicitly set `CHROME` that is not executable now fails instead of falling through. The qualification gate denominator was updated to 62 (`scripts/ci-gate.mjs` `TOTAL_CASES`, `test/ci-gate-accounting.test.mjs` `TOTAL`), and `scripts/test.mjs` `expectPass` is the full denominator 62, so a silently-shrunken page cannot pass. Two stateful feedback cases were tried and not kept (`gradient.mult(src(o0))` accumulation; a converging `gradient.blend(src(o0), 0.5)` chain over 24 self-reading frames — the two engines settle into fixed points 1 byte apart on 3,475/16,384 bytes): per-frame rounding drift makes them non-byte-exact on this host; recorded as observed limits rather than shipped as failing cases. The sum comparison is formula-bound, not legacy-pixel-bound; the fixed body is corroborated in-tree against the pinned Hydra authority commit `9d29a9f4fd8f9081b9759943f38db36f05b9a88f` ([verbatim entry](../workflow-evidence/gap-001/current-hydra-sum-source.txt)). [Evidence](../workflow-evidence/gap-001/parity-sweep-extension.json). |
 | 2026-09-26, rotate residual attribution | Containing commit | Attributed the `rotate_animated_parameter` residual by controlled probes and added `rotate_animated_uniform_parameter` (suite 62 → 63; `scripts/test.mjs` `expectPass`, `scripts/ci-gate.mjs` `TOTAL_CASES` and `test/ci-gate-accounting.test.mjs` `TOTAL` updated to 63; port sources unchanged, no bundle rebuild). Probe evidence: the engine uploads exactly `30.0f` for the DSL `osc(min: 0.2, max: 0.4, speed: 1)` angle at time 0.25 (`uniform1f` interception), no float32 constant near 30 reproduces the animated render, legacy's constant-argument render matches the port's constant-argument render exactly, legacy's own function-argument render differs from its own constant-argument render by 96/16,384 bytes (max delta 1 — the residual signature inside legacy Hydra alone), and legacy's function-argument render matches the port's animated render 0/16,384. Conclusion: the residual is SwiftShader compile-time constant folding of `cos`/`sin` (legacy inlines constant arguments) vs runtime trig of a per-frame uniform — not a port translation or engine-evaluation difference. Receipts with exit codes: `node --test test/*.test.mjs` exit 0 — 52 pass, 0 fail; `CHROME=/usr/bin/chromium PORT=8899 node scripts/test.mjs` exit 1 by design — 62 ok, 1 documented residual (unchanged signature), expected >= 63. The zero-failure gate policy is unchanged and the residual policy remains unratified. [Evidence](../workflow-evidence/gap-001/rotate-residual-attribution.json). |
 
-Initial run: `20260924-remaining-gap-documents`. [Retained initial report](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/before-COMPATIBILITY.md).
-Current run: `audit-20260924-170142`. [Current operational evidence](/Users/alex/.codex/automations/noisemaker-port-completion-audit/evidence-audit-20260924-170142/).
+Initial run: `20260924-remaining-gap-documents`. Retained initial report (retained evidence: before-COMPATIBILITY.md).
+Current run: `audit-20260924-170142`. [Current operational evidence](the noisemaker-port-completion-audit evidence archive audit-20260924-170142/).
 The containing commit and shared publication record identify the published documents. Documentation publication does not qualify the port for release.

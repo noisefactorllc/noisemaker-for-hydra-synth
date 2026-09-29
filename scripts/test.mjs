@@ -8,6 +8,7 @@
  * reported in the output so parity evidence records its provenance.
  */
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
+import { Buffer } from 'node:buffer'
 import { cleanupScratchBundle, LEGACY_BUNDLE, materializeLegacyBundle } from './upstream-bundle.mjs'
 import { accessSync, constants, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { createServer } from 'node:net'
@@ -80,12 +81,24 @@ function startServer() {
 }
 
 async function waitForServer(timeoutMs = 5000) {
+  // The served page must byte-match the checkout's sweep page, so a foreign
+  // server that happens to bind the chosen port cannot pass this probe
+  // (same identity check as scripts/ci-gate.mjs).
+  const localPage = readFileSync(join(process.cwd(), 'dev-noisemaker', 'pixel-parity.html'))
   const t0 = Date.now()
   while (Date.now() - t0 < timeoutMs) {
     try {
       const r = await fetch(`http://localhost:${PORT}/dev-noisemaker/pixel-parity.html`)
-      if (r.ok) return
-    } catch (_e) {}
+      if (r.ok) {
+        const body = Buffer.from(await r.arrayBuffer())
+        if (!body.equals(localPage)) {
+          throw new Error(`port ${PORT} is serving foreign content — refusing to run the sweep against it`)
+        }
+        return
+      }
+    } catch (e) {
+      if (e instanceof Error && e.message.includes('foreign content')) throw e
+    }
     await new Promise(r => setTimeout(r, 200))
   }
   throw new Error(`Server didn't come up on port ${PORT}`)

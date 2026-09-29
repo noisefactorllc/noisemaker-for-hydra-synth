@@ -5,20 +5,20 @@
   "browser": "chromium",
   "cycles": 60,
   "node": "v26.0.0",
-  "repo": "/Users/alex/.local/state/scaffold-cloud/office/jobs/7da3130c-9f52-406c-a728-53d8fa0547bb/repos/noisemaker-for-hydra-synth",
+  "repo": "<job workspace>/repos/noisemaker-for-hydra-synth",
   "repo_git_head": "4a1465a3ab5063a567fc38b2c725a6caa9c1f1eb",
-  "playwright_module": "/Users/alex/.local/state/scaffold-cloud/office/jobs/7da3130c-9f52-406c-a728-53d8fa0547bb/repos/noisemaker-for-hydra-synth/.host-pw/node_modules",
+  "playwright_module": "<job workspace>/repos/noisemaker-for-hydra-synth/.host-pw/node_modules",
   "commands": [
     {
       "command": "npm pack --json --pack-destination .host-scratch/gap002-host-d7BiRA/pack",
-      "cwd": "/Users/alex/.local/state/scaffold-cloud/office/jobs/7da3130c-9f52-406c-a728-53d8fa0547bb/repos/noisemaker-for-hydra-synth",
+      "cwd": "<job workspace>/repos/noisemaker-for-hydra-synth",
       "exit_code": 0,
       "stderr_tail": [
         "npm warn gitignore-fallback No .npmignore file found, using .gitignore for file exclusion. Consider creating a .npmignore file to explicitly control published files."
       ]
     },
     {
-      "command": "npm install --ignore-scripts --bin-links=false --no-audit --no-fund /Users/alex/.local/state/scaffold-cloud/office/jobs/7da3130c-9f52-406c-a728-53d8fa0547bb/repos/noisemaker-for-hydra-synth/.host-scratch/gap002-host-d7BiRA/pack/noisemaker-for-hydra-synth-2.0.0-dev.0.tgz",
+      "command": "npm install --ignore-scripts --bin-links=false --no-audit --no-fund <job workspace>/repos/noisemaker-for-hydra-synth/.host-scratch/gap002-host-d7BiRA/pack/noisemaker-for-hydra-synth-2.0.0-dev.0.tgz",
       "cwd": ".host-scratch/gap002-host-d7BiRA/consumer",
       "exit_code": 0,
       "stderr_tail": []
@@ -53,7 +53,7 @@
     }
   ],
   "reinstall": {
-    "command": "npm install --ignore-scripts --bin-links=false --no-audit --no-fund /Users/alex/.local/state/scaffold-cloud/office/jobs/7da3130c-9f52-406c-a728-53d8fa0547bb/repos/noisemaker-for-hydra-synth/.host-scratch/gap002-host-d7BiRA/pack/noisemaker-for-hydra-synth-2.0.0-dev.0.tgz",
+    "command": "npm install --ignore-scripts --bin-links=false --no-audit --no-fund <job workspace>/repos/noisemaker-for-hydra-synth/.host-scratch/gap002-host-d7BiRA/pack/noisemaker-for-hydra-synth-2.0.0-dev.0.tgz",
     "cwd": ".host-scratch/gap002-host-d7BiRA/consumer",
     "exit_code": 0,
     "stderr_tail": [],
@@ -75,7 +75,7 @@
     "pass": true
   },
   "pack": {
-    "tarball": "/Users/alex/.local/state/scaffold-cloud/office/jobs/7da3130c-9f52-406c-a728-53d8fa0547bb/repos/noisemaker-for-hydra-synth/.host-scratch/gap002-host-d7BiRA/pack/noisemaker-for-hydra-synth-2.0.0-dev.0.tgz",
+    "tarball": "<job workspace>/repos/noisemaker-for-hydra-synth/.host-scratch/gap002-host-d7BiRA/pack/noisemaker-for-hydra-synth-2.0.0-dev.0.tgz",
     "filename": "noisemaker-for-hydra-synth-2.0.0-dev.0.tgz",
     "file_count": 55,
     "size_bytes": 1662282
