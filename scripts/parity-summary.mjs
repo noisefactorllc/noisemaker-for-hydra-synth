@@ -31,6 +31,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { parseSummary, TOTAL_CASES } from './ci-gate.mjs'
+import { classifyCaseIds, deriveSweepCaseIds } from './sweep-case-set.mjs'
 import { LEGACY_BUNDLE, cleanupScratchBundle, materializeLegacyBundle } from './upstream-bundle.mjs'
 
 const CHROME = process.env.CHROME ||
@@ -127,6 +128,28 @@ try {
   if (requestedIds.length > 0 && /[^a-zA-Z0-9_]/.test(requestedIds.join(''))) {
     throw new Error('case ids must match [a-zA-Z0-9_]')
   }
+  // Expected case-id derivation (GAP-005 reopen 2026-09-30): the expected id
+  // set comes from the same catalog modules and page bytes the sweep renders,
+  // cross-checked against TOTAL_CASES, and every sweep's per-case ids are
+  // checked for duplicates, missing ids, and unexpected ids REGARDLESS of
+  // the counts — a DOM that duplicates one passing case and omits another
+  // keeps every count consistent, so only the id-set comparison catches it.
+  const expectedCaseIds = deriveSweepCaseIds()
+  if (expectedCaseIds.length !== TOTAL_CASES) {
+    throw new Error(`derived expected case-id set has ${expectedCaseIds.length} ids != TOTAL_CASES ${TOTAL_CASES} — the sweep catalog and the denominator have drifted`)
+  }
+  const requestDuplicates = requestedIds.filter((id, i) => requestedIds.indexOf(id) !== i)
+  if (requestDuplicates.length > 0) {
+    throw new Error(`duplicate case ids requested: ${[...new Set(requestDuplicates)].join(', ')}`)
+  }
+  const requestUnknown = requestedIds.filter(id => !expectedCaseIds.includes(id))
+  if (requestUnknown.length > 0) {
+    throw new Error(`unknown case ids requested (not in the derived expected set): ${requestUnknown.join(', ')}`)
+  }
+  // The id set each sweep DOM must report: the full derived set, or exactly
+  // the requested ids for case-scoped runs.
+  const expectedForRun = requestedIds.length > 0 ? [...requestedIds].sort() : expectedCaseIds
+  const idViolations = []
   const { addedUpstream: bootstrapped } = materializeLegacyBundle('[parity-summary]')
   addedUpstream = bootstrapped || addedUpstream
 
@@ -156,6 +179,14 @@ try {
     const summary = parseSummary(dom)
     if (summary.ok === null) throw new Error('no summary line — the sweep did not report results')
     authorityTotals.push(summary.total)
+    // Id-set accounting independent of the counts (GAP-005 reopen): the
+    // reported ids in emission order (duplicates preserved) must be exactly
+    // the expected set — no duplicates, no unexpected ids, no missing ids.
+    const reportedIds = [...summary.okLines, ...summary.failures.map(f => f.split(/\s+/)[0])]
+    const { duplicates, unexpected, missing: missingIds } = classifyCaseIds(reportedIds, expectedForRun)
+    for (const id of duplicates) idViolations.push(`${sweepUrl}: duplicate case id ${id}`)
+    for (const id of unexpected) idViolations.push(`${sweepUrl}: unexpected case id ${id}`)
+    for (const id of missingIds) idViolations.push(`${sweepUrl}: missing case id ${id}`)
     for (const name of summary.okLines) {
       counted.set(name, (counted.get(name) || { exact: 0, fail: 0 }))
       counted.get(name).exact++
@@ -209,8 +240,11 @@ try {
       console.log(`[parity-summary] ${id}: exact=${entry.exact} fail=${entry.fail} (per sweep size)`)
     }
   }
-  const passing = executed === expected && fail === 0 && missing === 0
-  console.log(`[parity-summary] ${passing ? 'GREEN' : 'FAIL'}: expected=${expected} executed=${executed} exact=${exact} fail=${fail} missing=${missing}`)
+  const passing = executed === expected && fail === 0 && missing === 0 && idViolations.length === 0
+  for (const violation of idViolations) {
+    console.error(`[parity-summary] ID VIOLATION: ${violation}`)
+  }
+  console.log(`[parity-summary] ${passing ? 'GREEN' : 'FAIL'}: expected=${expected} executed=${executed} exact=${exact} fail=${fail} missing=${missing}${idViolations.length > 0 ? ` idViolations=${idViolations.length}` : ''}`)
   console.log(summaryLine)
   process.exitCode = passing ? 0 : 1
 } catch (err) {

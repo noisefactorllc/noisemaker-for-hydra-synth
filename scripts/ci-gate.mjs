@@ -33,6 +33,7 @@
  * Exits 0 only when the unit suite is clean and the sweep is fully exact.
  */
 import { spawn, spawnSync } from 'node:child_process'
+import { classifyCaseIds, deriveSweepCaseIds } from './sweep-case-set.mjs'
 import { LEGACY_BUNDLE, LEGACY_BUNDLE_SHA256, cleanupScratchBundle, materializeLegacyBundle } from './upstream-bundle.mjs'
 import { createHash } from 'node:crypto'
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs'
@@ -215,9 +216,14 @@ async function runChromeDump(url, port) {
 // Pure sweep accounting: given a parseSummary result, enforce the complete
 // denominator from independent per-case lines and the strict zero-failure
 // policy. Returns { passed, reasons } so unit tests can exercise the GREEN
-// path's logic exactly as the live gate does. Failures are reported once
+// path's logic exactly as the live gate does. When expectedIds is provided
+// (the derived expected case-id set from scripts/sweep-case-set.mjs), the
+// per-case ids are additionally checked for duplicates, unexpected ids, and
+// missing ids REGARDLESS of the counts (GAP-005 reopen 2026-09-30: a DOM
+// that duplicates one case and omits another keeps every count consistent,
+// so only the id-set comparison catches it). Failures are reported once
 // (inside the mismatch reason), not duplicated.
-export function evaluateSweep(summary, totalCases) {
+export function evaluateSweep(summary, totalCases, expectedIds) {
   const { ok, total, fail, failures, okLines, perCaseCount } = summary
   const reasons = []
   if (ok === null || total === null || fail === null) {
@@ -239,6 +245,23 @@ export function evaluateSweep(summary, totalCases) {
     }
     if (okNames.size + failNames.size !== totalCases) {
       reasons.push(`distinct executed cases ${okNames.size + failNames.size} != expected ${totalCases}`)
+    }
+    if (expectedIds) {
+      // Id-set accounting independent of the counts: reported ids in
+      // emission order (ok lines plus FAIL/THROW first tokens, duplicates
+      // preserved) against the derived expected set. THROW names (e.g.
+      // `parity_fixture`) are not case ids and surface as unexpected.
+      const reportedIds = [...okLines, ...failures.map(f => f.split(/\s+/)[0])]
+      const { duplicates, unexpected, missing } = classifyCaseIds(reportedIds, expectedIds)
+      if (duplicates.length > 0) {
+        reasons.push(`duplicate case ids regardless of counts: ${duplicates.join(', ')}`)
+      }
+      if (unexpected.length > 0) {
+        reasons.push(`unexpected case ids not in the derived expected set: ${unexpected.join(', ')}`)
+      }
+      if (missing.length > 0) {
+        reasons.push(`missing case ids from the derived expected set: ${missing.join(', ')}`)
+      }
     }
     if (failures.length !== fail) {
       reasons.push('unreported failures detected')
@@ -331,6 +354,16 @@ try {
   await waitForServer(servingPort)
   console.log(`[ci-gate] http-server verified serving on port ${servingPort} (page bytes match the checkout)`)
 
+  // Derive the expected case-id set from the same catalog modules and page
+  // bytes the sweep renders (GAP-005 reopen 2026-09-30) and cross-check it
+  // against the TOTAL_CASES denominator before any sweep runs: a catalog or
+  // page drift must fail loudly, not silently move the denominator.
+  const expectedCaseIds = deriveSweepCaseIds()
+  if (expectedCaseIds.length !== TOTAL_CASES) {
+    throw new Error(`derived expected case-id set has ${expectedCaseIds.length} ids != TOTAL_CASES ${TOTAL_CASES} — the sweep catalog and the denominator have drifted`)
+  }
+  console.log(`[ci-gate] derived expected case-id set: ${expectedCaseIds.length} ids (matches TOTAL_CASES)`)
+
   let allSweepsPassed = true
   // Both sweep pages render in parallel: on a throttled hosted runner the
   // wall-clock cost is one page, not two, and a stall in one page's launch
@@ -348,7 +381,7 @@ try {
     const summary = parseSummary(dom)
     const { ok, total, fail, failures, perCaseCount } = summary
     console.log(`[ci-gate] pixel-parity ${sweepUrl}: ${ok}/${total} pass, ${fail} fail (${perCaseCount} per-case lines counted, ${Math.round(elapsed / 1000)}s)`)
-    const evaluation = evaluateSweep(summary, TOTAL_CASES)
+    const evaluation = evaluateSweep(summary, TOTAL_CASES, expectedCaseIds)
     // Surface each failing per-case line verbatim (THROW/FAIL text) so a
     // failing run's root cause is readable from the gate log itself, not
     // only inside the combined mismatch reason.

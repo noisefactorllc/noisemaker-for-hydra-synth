@@ -1,6 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { evaluateSweep, parseSummary } from '../scripts/ci-gate.mjs'
+import { deriveSweepCaseIds } from '../scripts/sweep-case-set.mjs'
 
 // Synthetic sweep-page DOMs in the exact protocol dev-noisemaker/pixel-parity.html
 // emits: per-case `ok <name>` / `FAIL <name> ...` lines inside <div id="log">,
@@ -68,4 +69,69 @@ test('evaluateSweep: a sweep with no summary line fails closed', () => {
   const result = evaluateSweep({ ok: null, total: null, fail: null, failures: [], okLines: [], perCaseCount: 0 }, TOTAL)
   assert.equal(result.passed, false)
   assert.ok(result.reasons.some(r => r.includes('no summary line')))
+})
+
+// GAP-005 reopen (2026-09-30) pins: with the derived expected id set, the
+// gate must fail duplicates, missing ids, and unexpected ids regardless of
+// the counts, and THROW lines must surface as unexpected ids.
+
+test('evaluateSweep with expectedIds: GREEN path passes against the live derived set', () => {
+  const ids = deriveSweepCaseIds()
+  const parsed = parseSummary(dom({ okCases: ids.length, failCases: 0, summaryOk: ids.length, summaryFail: 0, summaryTotal: ids.length }))
+  // Rewrite the synthetic names to the real derived ids, in order.
+  const okLines = ids
+  parsed.okLines = okLines
+  parsed.ok = okLines.length
+  parsed.perCaseCount = okLines.length + parsed.failures.length
+  const result = evaluateSweep(parsed, ids.length, ids)
+  assert.equal(result.passed, true)
+  assert.deepEqual(result.reasons, [])
+})
+
+test('evaluateSweep with expectedIds: a duplicated-and-omitted DOM fails with id-set reasons even when counts are consistent', () => {
+  // 71 per-case lines: case_0 reported twice, case_1 omitted. perCaseCount,
+  // total, and the summary all agree at 71; the id set is still wrong.
+  const lines = []
+  for (let i = 0; i < TOTAL; i++) lines.push(`ok    case_${i === 1 ? 0 : i}`)
+  lines.push(`=== ${TOTAL} ok, 0 fail / ${TOTAL} total ===`)
+  const domText = `<html><body><div id="log"><div>${lines.join('</div><div>')}</div></div><script></script></body></html>`
+  const parsed = parseSummary(domText)
+  const expectedIds = Array.from({ length: TOTAL }, (_, i) => `case_${i}`)
+  const result = evaluateSweep(parsed, TOTAL, expectedIds)
+  assert.equal(result.passed, false)
+  assert.ok(result.reasons.some(r => r.includes('duplicate case ids') && r.includes('case_0')))
+  assert.ok(result.reasons.some(r => r.includes('missing case ids') && r.includes('case_1')))
+})
+
+test('evaluateSweep with expectedIds: an unexpected id replacing a real one fails even with a consistent distinct count', () => {
+  const expectedIds = Array.from({ length: TOTAL }, (_, i) => `case_${i}`)
+  const lines = expectedIds.map(id => `ok    ${id === 'case_1' ? 'bogus_case' : id}`)
+  lines.push(`=== ${TOTAL} ok, 0 fail / ${TOTAL} total ===`)
+  const domText = `<html><body><div id="log"><div>${lines.join('</div><div>')}</div></div><script></script></body></html>`
+  const parsed = parseSummary(domText)
+  const result = evaluateSweep(parsed, TOTAL, expectedIds)
+  assert.equal(result.passed, false)
+  assert.ok(result.reasons.some(r => r.includes('unexpected case ids') && r.includes('bogus_case')))
+  assert.ok(result.reasons.some(r => r.includes('missing case ids') && r.includes('case_1')))
+})
+
+test('evaluateSweep with expectedIds: THROW lines are counted as failures and their names surface as unexpected ids', () => {
+  const expectedIds = Array.from({ length: TOTAL }, (_, i) => `case_${i}`)
+  const lines = expectedIds.slice(0, TOTAL - 1).map(id => `ok    ${id}`)
+  lines.push('THROW parity_fixture  →  boom')
+  lines.push(`=== ${TOTAL - 1} ok, 1 fail / ${TOTAL} total ===`)
+  const domText = `<html><body><div id="log"><div>${lines.join('</div><div>')}</div></div><script></script></body></html>`
+  const parsed = parseSummary(domText)
+  const result = evaluateSweep(parsed, TOTAL, expectedIds)
+  assert.equal(result.passed, false)
+  assert.ok(result.reasons.some(r => r.includes('mismatches must fail qualification')))
+  assert.ok(result.reasons.some(r => r.includes('unexpected case ids') && r.includes('parity_fixture')))
+  assert.ok(result.reasons.some(r => r.includes('missing case ids') && r.includes('case_70')))
+})
+
+test('evaluateSweep without expectedIds: behavior is unchanged (no id-set reasons)', () => {
+  const parsed = parseSummary(dom({ okCases: TOTAL, failCases: 0, summaryOk: TOTAL, summaryFail: 0, summaryTotal: TOTAL }))
+  const result = evaluateSweep(parsed, TOTAL)
+  assert.equal(result.passed, true)
+  assert.deepEqual(result.reasons, [])
 })
