@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>WebGPU probe</title>
+  <style>html, body { margin: 0; background: #000; color: #ccc; font: 13px/1.4 monospace; }
+  canvas { display: none; }
+  #log { padding: 12px; white-space: pre-wrap; }</style>
+</head>
+<body>
+  <canvas id="webgl" width="64" height="64"></canvas>
+  <canvas id="webgpu" width="64" height="64"></canvas>
+  <div id="log"></div>
+  <script type="module">
+    const log = document.getElementById('log')
+    const emit = (line) => {
+      const div = document.createElement('div')
+      div.textContent = line
+      log.appendChild(div)
+    }
+    let adapterInfo = 'n/a'
+    try {
+      const adapter = await navigator.gpu.requestAdapter()
+      adapterInfo = adapter ? JSON.stringify(adapter.info || {}) : 'no adapter'
+    } catch (e) { adapterInfo = 'gpu error: ' + e.message }
+    emit(`webgpu-adapter ${adapterInfo}`)
+    try {
+      const { DEFAULT_CDN, loadEngine, loadHydraEffects } = await import('../src/index.js')
+      const DSL = 'search hydra\ngradient(speed: 0).posterize(bins: 5, gamma: 0.7).write(o0)'
+      const W = 64, H = 64
+
+      function pixels(canvas) {
+        const copy = document.createElement('canvas')
+        copy.width = canvas.width
+        copy.height = canvas.height
+        const context = copy.getContext('2d', { willReadFrequently: true })
+        context.drawImage(canvas, 0, 0)
+        return context.getImageData(0, 0, copy.width, copy.height).data
+      }
+
+      async function makeRenderer(canvas, preferWebGPU) {
+        const engine = await loadHydraEffects()
+        const renderer = new engine.CanvasRenderer({
+          canvas,
+          width: W,
+          height: H,
+          basePath: DEFAULT_CDN,
+          bundlePath: `${DEFAULT_CDN}/effects`,
+          useBundles: true,
+          preferWebGPU,
+          autoStart: false
+        })
+        await renderer.loadManifest()
+        return renderer
+      }
+
+      async function render(renderer, canvas, dsl) {
+        await renderer.compile(dsl)
+        renderer.pipeline.graph.renderSurface = 'o0'
+        renderer.pipeline.globalUniforms.time = 0.25
+        renderer.pipeline.globalUniforms.resolution = [W, H]
+        renderer.pipeline.render(0.25)
+        return pixels(canvas)
+      }
+
+      const SKIP_WEBGL = new URLSearchParams(location.search).has('gpu-only')
+      const glRenderer = SKIP_WEBGL ? null : await makeRenderer(document.getElementById('webgl'), false)
+      const glPixels = SKIP_WEBGL ? null : await render(glRenderer, document.getElementById('webgl'), DSL)
+      if (!SKIP_WEBGL) emit(`webgl-backend ${glRenderer.pipeline.backend.getName ? glRenderer.pipeline.backend.getName() : 'unknown'}`)
+
+      let gpuRenderer
+      try {
+        gpuRenderer = await makeRenderer(document.getElementById('webgpu'), true)
+        try {
+          const device = gpuRenderer.pipeline.backend.device
+          device.lost.then(info => emit(`webgpu-device-lost: ${info.reason || ''} ${info.message || ''}`))
+          device.addEventListener?.('uncapturederror', ev => emit(`webgpu-uncaptured-error: ${(ev.error && ev.error.message) || ev.error}`))
+        } catch (_) {}
+        const gpuPixels = await render(gpuRenderer, document.getElementById('webgpu'), DSL)
+        emit(`webgpu-backend ${gpuRenderer.pipeline.backend.getName ? gpuRenderer.pipeline.backend.getName() : 'unknown'}`)
+        // Direct texture readback (engine WebGPU readPixels) to separate
+        // render correctness from canvas presentation in this probe.
+        try {
+          const state = gpuRenderer.pipeline.surfaces.get('o0')
+          const direct = await gpuRenderer.pipeline.backend.readPixels(state.read)
+          const directBytes = direct instanceof Uint8Array ? direct : new Uint8Array(direct.buffer || direct)
+          let d2 = 0, md2 = 0, nonZero = 0
+          const limit = glPixels ? Math.min(directBytes.length, glPixels.length) : directBytes.length
+          for (let i = 0; i < limit; i++) {
+            if (directBytes[i] !== 0) nonZero++
+            if (glPixels) {
+              const delta = Math.abs(directBytes[i] - glPixels[i])
+              if (delta !== 0) d2++
+              if (delta > md2) md2 = delta
+            }
+          }
+          const first = Array.from(directBytes.slice(0, 8))
+          emit(`webgpu-direct-read o0: nonZero=${nonZero} differing=${d2}/${limit} maxDelta=${md2} first=${JSON.stringify(first)}`)
+        } catch (e) {
+          emit(`webgpu-direct-read failed: ${e.message}`)
+        }
+        let differing = 0, maxDelta = 0
+        const samples = []
+        for (let i = 0; i < gpuPixels.length; i++) {
+          const delta = Math.abs(gpuPixels[i] - glPixels[i])
+          if (delta !== 0) differing++
+          if (delta > maxDelta) maxDelta = delta
+        }
+        for (const [x, y] of [[0, 0], [63, 0], [0, 63], [63, 63], [32, 32]]) {
+          const o = (y * W + x) * 4
+          samples.push({ at: [x, y], gl: Array.from(glPixels.slice(o, o + 4)), gpu: Array.from(gpuPixels.slice(o, o + 4)) })
+        }
+        if (differing === 0) emit('ok    webgpu_gradient_posterize')
+        else emit(`FAIL  webgpu_gradient_posterize  →  ${differing}/${gpuPixels.length} bytes differ; max delta ${maxDelta}; samples ${JSON.stringify(samples)}`)
+      } catch (e) {
+        emit(`THROW webgpu_gradient_posterize  →  ${e && e.message ? e.message : String(e)}`)
+      }
+      emit('=== 1 ok, 0 fail / 1 total ===')
+    } catch (error) {
+      emit(`THROW probe  →  ${error && error.message ? error.message : String(error)}`)
+      emit('=== probe failed ===')
+    }
+  </script>
+</body>
+</html>

@@ -28,7 +28,7 @@ test('contains no unreachable legacy Hydra runtime', () => {
     assert.equal(existsSync(path), false, `${path} must be removed`)
   }
 
-  assert.deepEqual(readdirSync('dev-noisemaker').sort(), ['pixel-parity.html'])
+  assert.deepEqual(readdirSync('dev-noisemaker').sort(), ['pixel-parity.html', 'webgpu-probe.html'])
   const pkg = JSON.parse(readFileSync('package.json', 'utf8'))
   assert.equal(pkg.dependencies?.meyda, undefined)
 })

@@ -1,5 +1,7 @@
 import glslFunctions from '../glsl/glsl-functions.js'
 import utilityGlsl from '../glsl/utility-functions.js'
+import { translateFusedProgram } from './wgslTranslate.js'
+import { hydraPassTextureInputs } from './portHydraEffects.js'
 import {
   hydraGlslBody,
   isExecutableHydraEffect
@@ -308,8 +310,26 @@ export function buildHydraShaderOverrides(compiled, promotedSurfaces = null) {
       const nodes = reachableHydraSteps(finalTemp, steps)
       const final = nodes.find(({ step }) => step.temp === finalTemp)
       const fused = buildShader(nodes, finalTemp)
+      const override = { glsl: fused.glsl }
+      // WebGPU source (GAP-001): translate the fused program. The program's
+      // texture bindings mirror the target effect definition's pass inputs;
+      // the only dynamic uniforms are the injected oscillator uniforms.
+      try {
+        // The texture bindings must mirror the target effect definition's
+        // pass inputs exactly (inputTex, tex/tex2 from the leading _c0/_c1
+        // classification for combine/combineCoord finals, prevBuffer) — the
+        // engine's bind group declares every pass-input pair.
+        override.wgsl = translateFusedProgram(fused.glsl, {
+          textureInputs: hydraPassTextureInputs(final.effect),
+          uniformNames: Object.keys(fused.uniformBindings)
+        })
+      } catch (_) {
+        // A translation failure leaves the GLSL override untouched; the
+        // WebGPU backend will report the missing WGSL source for this
+        // program, which is the truthful observable state.
+      }
       shaderOverrides[finalTemp] = {
-        [final.effect.name]: { glsl: fused.glsl }
+        [final.effect.name]: override
       }
       if (Object.keys(fused.uniformBindings).length > 0) {
         uniformBindings[finalTemp] = fused.uniformBindings

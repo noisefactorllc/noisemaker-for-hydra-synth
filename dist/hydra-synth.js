@@ -1157,6 +1157,315 @@ var HydraEffects = (() => {
     return body;
   }
 
+  // src/engine/wgslTranslate.js
+  var GLSL_TYPE_TO_WGSL = {
+    float: "f32",
+    int: "i32",
+    vec2: "vec2f",
+    vec3: "vec3f",
+    vec4: "vec4f",
+    mat2: "mat2x2f",
+    mat3: "mat3x3f",
+    mat4: "mat4x4f"
+  };
+  function glslTypeToWgsl(type) {
+    const wgsl = GLSL_TYPE_TO_WGSL[type];
+    if (!wgsl) throw new Error(`No WGSL equivalent for GLSL type '${type}'`);
+    return wgsl;
+  }
+  function splitTopLevel(text) {
+    const parts = [];
+    let depth = 0;
+    let current = "";
+    for (const ch of text) {
+      if (ch === "(" || ch === "[") depth++;
+      else if (ch === ")" || ch === "]") depth--;
+      if (ch === "," && depth === 0) {
+        parts.push(current);
+        current = "";
+      } else {
+        current += ch;
+      }
+    }
+    if (current.trim() !== "") parts.push(current);
+    return parts.map((part) => part.trim());
+  }
+  function translateAtan(text) {
+    let out = "";
+    let i = 0;
+    while (i < text.length) {
+      const idx = text.indexOf("atan", i);
+      if (idx === -1) {
+        out += text.slice(i);
+        break;
+      }
+      const before = idx > 0 ? text[idx - 1] : "";
+      const after = text[idx + 4];
+      if (!/[A-Za-z0-9_]/.test(before) && after === "(" && !text.slice(idx).startsWith("atan2")) {
+        let depth = 0;
+        let end = -1;
+        for (let j = idx + 4; j < text.length; j++) {
+          if (text[j] === "(") depth++;
+          else if (text[j] === ")") {
+            depth--;
+            if (depth === 0) {
+              end = j;
+              break;
+            }
+          }
+        }
+        if (end !== -1) {
+          const inner = text.slice(idx + 5, end);
+          const args = splitTopLevel(inner);
+          if (args.length === 2) {
+            out += text.slice(i, idx) + "atan2(" + inner + ")";
+            i = end + 1;
+            continue;
+          }
+        }
+      }
+      out += text.slice(i, idx + 4);
+      i = idx + 4;
+    }
+    return out;
+  }
+  var IDENT = "[A-Za-z_][A-Za-z0-9_]*";
+  var UTILITY_WGSL = Object.values(utility_functions_default).map((utility) => translateGlslStatements(utility.glsl, {})).join("\n\n");
+  function translateGlslStatements(glsl, { samplers = {}, uniformNames = [] } = {}) {
+    let text = glsl;
+    text = text.replace(/^\s*#version.*$/gm, "");
+    text = text.replace(/^\s*precision\s+.*$/gm, "");
+    text = text.replace(/^\s*uniform\s+.*$/gm, "");
+    text = text.replace(/^\s*out\s+vec4\s+\w+\s*;$/gm, "");
+    text = text.replace(
+      /\btexture(?:2D)?\s*\(\s*(\w+)\s*,\s*fract\s*\(\s*vec2\s*\(\s*([^,()]+?)\s*,\s*1\.0\s*-\s*([^()]+?)\s*\)\s*\)\s*/g,
+      (m, tex, x, y) => {
+        const sampler = samplers[tex];
+        if (!sampler) throw new Error(`texture('${tex}') has no known WGSL sampler binding`);
+        return `textureSample(${tex}, ${sampler}, fract(vec2(${x}, ${y})))`;
+      }
+    );
+    text = text.replace(/\btexture(?:2D)?\s*\(\s*(\w+)\s*,/g, (m, tex) => {
+      const sampler = samplers[tex];
+      if (!sampler) throw new Error(`texture('${tex}') has no known WGSL sampler binding`);
+      return `textureSample(${tex}, ${sampler},`;
+    });
+    {
+      let out = "";
+      let i = 0;
+      for (; ; ) {
+        const m = /\bmod\s*\(/.exec(text.slice(i));
+        if (!m) {
+          out += text.slice(i);
+          break;
+        }
+        const start = i + m.index;
+        out += text.slice(i, start);
+        const open = start + m[0].length - 1;
+        let depth = 0;
+        let end = -1;
+        for (let j = open; j < text.length; j++) {
+          if (text[j] === "(") depth++;
+          else if (text[j] === ")") {
+            depth--;
+            if (depth === 0) {
+              end = j;
+              break;
+            }
+          }
+        }
+        if (end === -1) throw new Error("unbalanced mod( in GLSL source");
+        const args = splitTopLevel(text.slice(open + 1, end));
+        if (args.length !== 2) throw new Error(`mod() with ${args.length} arguments is not supported`);
+        const a = args[0];
+        const b = args[1];
+        out += `((${a}) - (${b}) * floor((${a}) / (${b})))`;
+        i = end + 1;
+      }
+      text = out;
+    }
+    text = translateAtan(text);
+    text = text.replace(
+      new RegExp(`\\bconst\\s+(float|int|vec[234]|mat[234])\\s+(${IDENT})\\s*=`, "g"),
+      (_, type, name) => `const ${name}: ${glslTypeToWgsl(type)} =`
+    );
+    text = text.replace(/\bvec([234])\s*\(/g, (_, n) => `vec${n}f(`);
+    text = text.replace(/\bmat([234])\s*\(/g, (_, n) => `mat${n}x${n}f(`);
+    text = text.replace(/\bfloat\s*\(/g, "f32(");
+    text = text.replace(/\bint\s*\(/g, "i32(");
+    text = text.replace(/\bfragColor\s*=/g, "return ");
+    text = text.replace(
+      new RegExp(`\\b(float|int|vec[234]|mat[234])\\s+(${IDENT})\\s*=`, "g"),
+      (_, type, name) => `var ${name}: ${glslTypeToWgsl(type)} =`
+    );
+    text = text.replace(
+      new RegExp(`\\b(float|int|vec[234])\\s+(${IDENT})\\s*;`, "g"),
+      (_, type, name) => `var ${name}: ${glslTypeToWgsl(type)};`
+    );
+    text = text.replace(new RegExp(`(${IDENT})\\s*\\+\\+`, "g"), "$1 = $1 + 1");
+    text = text.replace(new RegExp(`(${IDENT})\\s*--`, "g"), "$1 = $1 - 1");
+    if (/%/.test(text)) throw new Error("GLSL '%' has no WGSL float equivalent and is not in the port's corpus");
+    const globalUniformNames = ["time", "resolution", ...uniformNames];
+    for (const name of globalUniformNames) {
+      text = text.replace(new RegExp(`\\b${name}\\b`, "g"), `params.${name}`);
+    }
+    text = text.replace(
+      new RegExp(`\\b(void|float|int|vec[234]|mat[234])\\s+(${IDENT})\\s*\\(([^)]*)\\)\\s*\\{`, "g"),
+      (_, returnType, name, params) => {
+        const wgslParams = params.trim() === "" ? "" : splitTopLevel(params).map((param) => {
+          const m = param.match(new RegExp(`^(float|int|vec[234]|mat[234])\\s+(${IDENT})$`));
+          if (!m) throw new Error(`Unsupported GLSL parameter '${param.trim()}'`);
+          return `${m[2]}: ${glslTypeToWgsl(m[1])}`;
+        }).join(", ");
+        const ret = returnType === "void" ? "" : ` -> ${glslTypeToWgsl(returnType)}`;
+        return `fn ${name}(${wgslParams})${ret} {`;
+      }
+    );
+    return text;
+  }
+  var HELPERS = "";
+  var VERTEX_STAGE = `
+struct VertexOutput {
+  @builtin(position) position: vec4f,
+  @location(0) uv: vec2f,
+}
+
+@vertex
+fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
+  let positions = array<vec2f, 3>(
+    vec2f(-1.0, -1.0),
+    vec2f(3.0, -1.0),
+    vec2f(-1.0, 3.0)
+  );
+  let pos = positions[vertexIndex];
+  var out: VertexOutput;
+  out.position = vec4f(pos, 0.0, 1.0);
+  out.uv = pos * 0.5 + vec2f(0.5, 0.5);
+  return out;
+}
+`;
+  function buildProgramInterface({ inputs: rawInputs, uniforms }) {
+    const inputs = rawInputs.map((i) => typeof i === "string" ? { name: i } : i);
+    const lines = [];
+    const samplers = {};
+    let binding = 0;
+    for (const input of inputs) {
+      lines.push(`@group(0) @binding(${binding++}) var ${input.name}: texture_2d<f32>;`);
+      const samplerName = `${input.name}_sampler`;
+      lines.push(`@group(0) @binding(${binding++}) var ${samplerName}: sampler;`);
+      samplers[input.name] = samplerName;
+    }
+    let struct = "";
+    if (uniforms.length > 0) {
+      const members = uniforms.map((u) => `  ${u.name}: ${u.wgsl},`).join("\n");
+      struct = `struct Params {
+${members}
+}
+@group(0) @binding(${binding++}) var<uniform> params: Params;`;
+    }
+    return { bindings: lines.join("\n"), struct, uniformBindingIndex: uniforms.length > 0 ? binding - 1 : null, samplers };
+  }
+  function translateFusedProgram(fusedGlsl, { textureInputs, uniformNames }) {
+    const uniforms = [];
+    for (const name of uniformNames || []) {
+      uniforms.push({ name, wgsl: "f32" });
+    }
+    uniforms.push({ name: "resolution", wgsl: "vec2f" });
+    uniforms.push({ name: "time", wgsl: "f32" });
+    const inputs = [...textureInputs];
+    if (!inputs.some((i) => (typeof i === "string" ? i : i.name) === "prevBuffer")) inputs.push("prevBuffer");
+    const { bindings, struct, samplers } = buildProgramInterface({ inputs, uniforms });
+    let text = translateGlslStatements(fusedGlsl, { samplers, uniformNames });
+    text = text.replace(/\bfn main\(\)/, "@fragment\nfn fs_main(in: VertexOutput) -> @location(0) vec4f");
+    text = text.replace(/\bfn main\(/, "@fragment\nfn fs_main(in: VertexOutput) -> @location(0) vec4f");
+    text = text.replace(/gl_FragCoord\.x/g, "in.position.x");
+    text = text.replace(/gl_FragCoord\.y/g, "in.position.y");
+    text = text.replace(/params\.resolution\.y\s*-\s*in\.position\.y/g, "in.position.y");
+    for (const name of uniformNames || []) {
+      if (new RegExp(`(?<!params\\.)\\b${name}\\b`).test(text)) {
+        throw new Error(`fused WGSL translation left a bare dynamic uniform reference: ${name}`);
+      }
+    }
+    return `${bindings}
+
+${struct}
+
+${HELPERS}
+
+${UTILITY_WGSL}
+
+${VERTEX_STAGE}
+
+${text}`;
+  }
+  function buildEffectWgsl({ name, type, glsl: body, wrapperInputs, passInputs }) {
+    const uniforms = [
+      ...wrapperInputs.map((i) => ({ name: i.name, wgsl: glslTypeToWgsl(i.type) })),
+      { name: "resolution", wgsl: "vec2f" },
+      { name: "time", wgsl: "f32" }
+    ];
+    const { bindings, struct, samplers } = buildProgramInterface({ inputs: passInputs, uniforms });
+    const translated = translateGlslStatements(body, { samplers });
+    const ret = type === "coord" || type === "combineCoord" ? "vec2f" : "vec4f";
+    const leading = {
+      src: [["_st", "vec2f"]],
+      coord: [["_st", "vec2f"]],
+      color: [["_c0", "vec4f"]],
+      combine: [["_c0", "vec4f"], ["_c1", "vec4f"]],
+      combineCoord: [["_st", "vec2f"], ["_c0", "vec4f"]]
+    }[type];
+    const fnName = `_hydra_${name}`;
+    const params = leading.map(([arg, t]) => `${arg}: ${t}`);
+    const extraParams = wrapperInputs.map((i) => `${i.name}: ${glslTypeToWgsl(i.type)}`);
+    const wrapper = `fn ${fnName}(${[...params, ...extraParams].join(", ")}) -> ${ret} {
+${translated}
+}`;
+    const sample = (tex, coord) => `textureSample(${tex}, ${samplers[tex]}, ${coord})`;
+    let main;
+    const st = "let _st = in.position.xy / params.resolution;";
+    if (type === "src") {
+      main = `${st}
+  return ${fnName}(_st${wrapperInputs.map((i) => `, params.${i.name}`).join("")});`;
+    } else if (type === "coord") {
+      main = `${st}
+  let newUV = ${fnName}(_st${wrapperInputs.map((i) => `, params.${i.name}`).join("")});
+  return ${sample("inputTex", "vec2f(newUV.x, newUV.y)")};`;
+    } else if (type === "color") {
+      main = `${st}
+  let _c0 = ${sample("inputTex", "_st")};
+  return ${fnName}(_c0${wrapperInputs.map((i) => `, params.${i.name}`).join("")});`;
+    } else if (type === "combine") {
+      main = `${st}
+  let _c0 = ${sample("inputTex", "_st")};
+  let _c1 = ${sample("tex", "_st")};
+  return ${fnName}(_c0, _c1${wrapperInputs.map((i) => `, params.${i.name}`).join("")});`;
+    } else if (type === "combineCoord") {
+      main = `${st}
+  let _c0 = ${sample("tex", "_st")};
+  let newUV = ${fnName}(_st, _c0${wrapperInputs.map((i) => `, params.${i.name}`).join("")});
+  return ${sample("inputTex", "vec2f(newUV.x, newUV.y)")};`;
+    } else {
+      throw new Error(`Unknown Hydra effect type '${type}'`);
+    }
+    const mainFn = `
+@fragment
+fn fs_main(in: VertexOutput) -> @location(0) vec4f {
+  ${main}
+}`;
+    return `${bindings}
+
+${struct}
+
+${HELPERS}
+
+${UTILITY_WGSL}
+
+${VERTEX_STAGE}
+
+${wrapper}
+${mainFn}`;
+  }
+
   // src/engine/portHydraEffects.js
   var HYDRA_NAMESPACE = "hydra";
   var CALLABLE_ALIASES = { osc: "hydraOsc" };
@@ -1362,12 +1671,40 @@ ${tmpl.body(fnName, callArgs, sampler1, sampler2)}
       ]
     });
   }
+  function hydraPassTextureInputs(effect) {
+    const tmpl = TEMPLATES[effect.type];
+    if (!tmpl) throw new Error(`Hydra effect '${effect.name}' has unknown type '${effect.type}'`);
+    const { samplerInputs } = classifyInputs(processInputs(effect));
+    const names = [];
+    if (tmpl.needsInputTex) names.push("inputTex");
+    for (const s of samplerInputs) names.push(s.samplerName);
+    names.push("prevBuffer");
+    return names;
+  }
   function registerHydraEffect(effect, engine) {
     const eng = engine || getEngine();
     const definition = buildEffectDefinition(effect, eng.Effect);
     const shader = buildShader(effect);
+    const tmpl = TEMPLATES[effect.type];
+    const { wrapperInputs, samplerInputs } = classifyInputs(processInputs(effect));
     if (!definition.shaders) definition.shaders = {};
-    definition.shaders[effect.name] = { glsl: shader };
+    definition.shaders[effect.name] = {
+      glsl: shader,
+      // WebGPU backend source (GAP-001): translated from the same GLSL. The
+      // shared per-effect program is a fallback path — fused chain programs
+      // carry their own exact-typed WGSL — so its uniform members are f32.
+      wgsl: buildEffectWgsl({
+        name: effect.name,
+        type: effect.type,
+        glsl: hydraGlslBody(effect),
+        wrapperInputs,
+        passInputs: [
+          ...tmpl.needsInputTex ? ["inputTex"] : [],
+          ...samplerInputs.map((s) => s.samplerName),
+          "prevBuffer"
+        ]
+      })
+    };
     eng.registerEffect(effect.name, definition);
     eng.registerEffect(`${HYDRA_NAMESPACE}.${effect.name}`, definition);
     eng.registerEffect(`${HYDRA_NAMESPACE}/${effect.name}`, definition);
@@ -1656,8 +1993,16 @@ void main() {
         const nodes = reachableHydraSteps(finalTemp, steps);
         const final = nodes.find(({ step }) => step.temp === finalTemp);
         const fused = buildShader2(nodes, finalTemp);
+        const override = { glsl: fused.glsl };
+        try {
+          override.wgsl = translateFusedProgram(fused.glsl, {
+            textureInputs: hydraPassTextureInputs(final.effect),
+            uniformNames: Object.keys(fused.uniformBindings)
+          });
+        } catch (_) {
+        }
         shaderOverrides[finalTemp] = {
-          [final.effect.name]: { glsl: fused.glsl }
+          [final.effect.name]: override
         };
         if (Object.keys(fused.uniformBindings).length > 0) {
           uniformBindings[finalTemp] = fused.uniformBindings;

@@ -5,6 +5,7 @@ import {
   hydraGlslBody,
   isExecutableHydraEffect
 } from './hydraGlsl.js'
+import { buildEffectWgsl } from './wgslTranslate.js'
 
 export const HYDRA_NAMESPACE = 'hydra'
 const CALLABLE_ALIASES = { osc: 'hydraOsc' }
@@ -241,13 +242,46 @@ function buildEffectDefinition(effect, Effect) {
  * Engine module passed explicitly so this function works during init
  * (after loadEngine resolved) without re-importing.
  */
+// Ordered pass-input texture names for an effect definition — the bind
+// group's (texture, sampler) pairs in engine declaration order. Shared by
+// the definition builder and the fused WGSL override so both see the same
+// binding set (inputTex, tex/tex2 for combine/combineCoord, prevBuffer).
+export function hydraPassTextureInputs(effect) {
+  const tmpl = TEMPLATES[effect.type]
+  if (!tmpl) throw new Error(`Hydra effect '${effect.name}' has unknown type '${effect.type}'`)
+  const { samplerInputs } = classifyInputs(processInputs(effect))
+  const names = []
+  if (tmpl.needsInputTex) names.push('inputTex')
+  for (const s of samplerInputs) names.push(s.samplerName)
+  names.push('prevBuffer')
+  return names
+}
+
 export function registerHydraEffect(effect, engine) {
   const eng = engine || getEngine()
   const definition = buildEffectDefinition(effect, eng.Effect)
   const shader = buildShader(effect)
+  const tmpl = TEMPLATES[effect.type]
+  const { wrapperInputs, samplerInputs } = classifyInputs(processInputs(effect))
 
   if (!definition.shaders) definition.shaders = {}
-  definition.shaders[effect.name] = { glsl: shader }
+  definition.shaders[effect.name] = {
+    glsl: shader,
+    // WebGPU backend source (GAP-001): translated from the same GLSL. The
+    // shared per-effect program is a fallback path — fused chain programs
+    // carry their own exact-typed WGSL — so its uniform members are f32.
+    wgsl: buildEffectWgsl({
+      name: effect.name,
+      type: effect.type,
+      glsl: hydraGlslBody(effect),
+      wrapperInputs,
+      passInputs: [
+        ...(tmpl.needsInputTex ? ['inputTex'] : []),
+        ...samplerInputs.map(s => s.samplerName),
+        'prevBuffer'
+      ]
+    })
+  }
 
   // Effect registry — multiple keys for resolver flexibility.
   eng.registerEffect(effect.name, definition)

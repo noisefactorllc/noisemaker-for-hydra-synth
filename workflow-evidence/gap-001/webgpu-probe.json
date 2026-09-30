@@ -1,0 +1,25 @@
+{
+  "gap": "GAP-001",
+  "check": "webgpu wgsl render probe (host-feasibility)",
+  "host": "Linux SwiftShader owner container (chromium 154 headless)",
+  "command": "dev-noisemaker/webgpu-probe.html via chromium --headless=new --enable-unsafe-webgpu --enable-unsafe-swiftshader, driven over CDP",
+  "dsl": "gradient(speed: 0).posterize(bins: 5, gamma: 0.7).write(o0)",
+  "results": {
+    "webgpuAdapter": "available (requestAdapter resolved)",
+    "backendSelected": "WebGPU (engine pipeline selected its WebGPU backend for preferWebGPU:true)",
+    "wgslCompilation": "reached (earlier probe iterations surfaced WGSL compile errors from the translator until fixed: overloaded helpers, missing @location(0) fragment return, void main returning a value, bare dynamic uniform identifiers)",
+    "pixelReadback": "FAILED - \"Failed to execute 'mapAsync' on 'GPUBuffer': A valid external Instance reference no longer exists\"",
+    "canvasReadback": "all zeros; host GPU log shows SharedImageBackingFactory/WebgpuSwapChainTexture creation failure followed by context loss"
+  },
+  "variantsTried": [
+    "--use-webgpu-adapter=swiftshader",
+    "--enable-unsafe-swiftshader",
+    "--use-angle=swiftshader",
+    "default adapter",
+    "WebGPU-only (no WebGL2 context)",
+    "WebGPU after a WebGL2 render"
+  ],
+  "conclusion": "The translated WGSL compiles and is selected by the engine's WebGPU backend, but this container's SwiftShader/Chromium stack invalidates the GPU instance at the first render; no WebGPU pixels can be produced on this host. Pixel qualification runs on the real-GPU (macOS/Metal) host using the committed probe page.",
+  "exitCode": 0,
+  "date": "2026-09-30"
+}
