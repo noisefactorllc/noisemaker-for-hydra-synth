@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { evaluateSweep, parseSummary } from '../scripts/ci-gate.mjs'
+import { evaluateSweep, parseSummary, TOTAL_CASES } from '../scripts/ci-gate.mjs'
 import { deriveSweepCaseIds } from '../scripts/sweep-case-set.mjs'
 
 // Synthetic sweep-page DOMs in the exact protocol dev-noisemaker/pixel-parity.html
@@ -23,7 +23,7 @@ function dom({ okCases, failCases, summaryOk, summaryFail, summaryTotal, duplica
   return `<html><body><div id="log"><div>${lines.join('</div><div>')}</div></div><script></script></body></html>`
 }
 
-const TOTAL = 71
+const TOTAL = TOTAL_CASES
 
 test('evaluateSweep GREEN path: fully exact 71/71 sweep passes with zero reasons', () => {
   const parsed = parseSummary(dom({ okCases: TOTAL, failCases: 0, summaryOk: TOTAL, summaryFail: 0, summaryTotal: TOTAL }))
@@ -32,8 +32,8 @@ test('evaluateSweep GREEN path: fully exact 71/71 sweep passes with zero reasons
   assert.deepEqual(result.reasons, [])
 })
 
-test('evaluateSweep: 70/71 with one mismatch fails with the strict mismatch reason, reported once', () => {
-  const parsed = parseSummary(dom({ okCases: 70, failCases: 1, summaryOk: 70, summaryFail: 1, summaryTotal: TOTAL }))
+test('evaluateSweep: one short of the denominator with a mismatch fails with the strict mismatch reason, reported once', () => {
+  const parsed = parseSummary(dom({ okCases: TOTAL - 1, failCases: 1, summaryOk: TOTAL - 1, summaryFail: 1, summaryTotal: TOTAL }))
   const result = evaluateSweep(parsed, TOTAL)
   assert.equal(result.passed, false)
   assert.equal(result.reasons.length, 1)
@@ -126,7 +126,7 @@ test('evaluateSweep with expectedIds: THROW lines are counted as failures and th
   assert.equal(result.passed, false)
   assert.ok(result.reasons.some(r => r.includes('mismatches must fail qualification')))
   assert.ok(result.reasons.some(r => r.includes('unexpected case ids') && r.includes('parity_fixture')))
-  assert.ok(result.reasons.some(r => r.includes('missing case ids') && r.includes('case_70')))
+  assert.ok(result.reasons.some(r => r.includes('missing case ids') && r.includes(`case_${TOTAL - 1}`)))
 })
 
 test('evaluateSweep without expectedIds: behavior is unchanged (no id-set reasons)', () => {

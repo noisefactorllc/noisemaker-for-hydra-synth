@@ -234,6 +234,25 @@
         dsl: 'gradient(speed: 0).blend(tex: noise(scale: 4, offset: 0.2), amount: 0.65)'
       },
       {
+        // Fifth bounded matrix point: a coordinate-warp chain (combineCoord
+        // with a nested texture) at non-default parameters — the matrix's
+        // modulate class. Time-invariant: gradient(speed: 0), shape, and
+        // modulateRotate have no time-dependent inputs.
+        name: 'parameter_matrix_coord',
+        time: 0.2,
+        legacy: hydra => hydra.synth.gradient(0).modulateRotate(hydra.synth.shape(3, 0.6, 0.2), 0.8, 0.1),
+        dsl: 'gradient(speed: 0).modulateRotate(tex: shape(sides: 3, radius: 0.6, smoothing: 0.2), multiple: 0.8, offset: 0.1)'
+      },
+      {
+        // Sixth bounded matrix point: a geometry chain through a non-default
+        // coord effect (kaleid) and posterize. Time-invariant: shape, kaleid,
+        // and posterize have no time-dependent inputs.
+        name: 'parameter_matrix_kaleid',
+        time: 0.35,
+        legacy: hydra => hydra.synth.shape(4, 0.35, 0.15).kaleid(5).posterize(6, 0.8),
+        dsl: 'shape(sides: 4, radius: 0.35, smoothing: 0.15).kaleid(nSides: 5).posterize(bins: 6, gamma: 0.8)'
+      },
+      {
         // Current Hydra source reference: gradient = vec4(_st, sin(time*speed), 1.0)
         // with speed 0 → (x, y, 0, 1); sum(scale) = vec4(vec3(v.r+v.g+v.b+v.a), _c0.a).
         // With scale = 0.25 per channel: rgb = 0.25*(x + y + 1), alpha = 1.

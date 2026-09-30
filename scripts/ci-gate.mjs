@@ -75,16 +75,16 @@ let addedUpstream = false
 // workflow authority (the qualified macOS host record for the legacy
 // 58-case suite is 58/58 exact). The GAP-001 complete expected-case
 // inventory remains open and is not claimed by this runner.
-// The page emits 71 cases per size sweep (the page runs once at 64x64 and
+// The page emits 73 cases per size sweep (the page runs once at 64x64 and
 // once at 96x48 via ?w=96&h=48): `sum` was never a generated legacy case (the
 // authority bundle's sum shader cannot compile) and stays excluded there;
-// `sum_reference`, `sum_default_scale`, the four parameter-matrix cases,
+// `sum_reference`, `sum_default_scale`, the six parameter-matrix cases,
 // `rotate_animated_uniform_parameter` and the six second-time-point cases
 // (`osc_nonzero_time_t075`, `voronoi_src_t075`, `parameter_matrix_t075`,
 // `parameter_matrix_color_t05`, `parameter_matrix_geometry_t06`,
 // `parameter_matrix_combine_t075`) were added on top of the original
-// generated fixtures. Denominator is 71 per sweep.
-const TOTAL_CASES = 71
+// generated fixtures. Denominator is 73 per sweep.
+const TOTAL_CASES = 73
 export { TOTAL_CASES }
 
 function startServer(port) {
