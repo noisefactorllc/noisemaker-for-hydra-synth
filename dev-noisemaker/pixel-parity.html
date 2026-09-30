@@ -253,6 +253,49 @@
         dsl: 'shape(sides: 4, radius: 0.35, smoothing: 0.15).kaleid(nSides: 5).posterize(bins: 6, gamma: 0.8)'
       },
       {
+        // Seventh bounded matrix point: the gradient generator at a
+        // non-default speed — the last src family without a non-default
+        // matrix point. The body is vec4(_st, sin(time*speed), 1.0), so
+        // speed 3 is time-dependent; a second time point follows.
+        name: 'parameter_matrix_gradient',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(3).posterize(4, 0.9),
+        dsl: 'gradient(speed: 3).posterize(bins: 4, gamma: 0.9)'
+      },
+      {
+        // Second time point for parameter_matrix_gradient.
+        name: 'parameter_matrix_gradient_t075',
+        time: 0.75,
+        legacy: hydra => hydra.synth.gradient(3).posterize(4, 0.9),
+        dsl: 'gradient(speed: 3).posterize(bins: 4, gamma: 0.9)'
+      },
+      {
+        // Eighth bounded matrix point: the solid generator at non-default
+        // color and alpha through invert — the last src family. Time-
+        // invariant: solid and invert have no time-dependent inputs.
+        name: 'parameter_matrix_solid',
+        time: 0.25,
+        legacy: hydra => hydra.synth.solid(0.85, 0.3, 0.1, 0.9).invert(0.7),
+        dsl: 'solid(0.85, 0.3, 0.1, 0.9).invert(amount: 0.7)'
+      },
+      {
+        // Ninth bounded matrix point: the voronoi generator at non-default
+        // parameters (authority defaults are scale 5, speed 0.3, blending 0.3).
+        // The body is time-dependent via sin(time*speed), so a second time
+        // point follows.
+        name: 'parameter_matrix_voronoi',
+        time: 0.25,
+        legacy: hydra => hydra.synth.voronoi(10, 0.6, 0.4).saturate(1.4),
+        dsl: 'voronoi(scale: 10, speed: 0.6, blending: 0.4).saturate(amount: 1.4)'
+      },
+      {
+        // Second time point for parameter_matrix_voronoi.
+        name: 'parameter_matrix_voronoi_t075',
+        time: 0.75,
+        legacy: hydra => hydra.synth.voronoi(10, 0.6, 0.4).saturate(1.4),
+        dsl: 'voronoi(scale: 10, speed: 0.6, blending: 0.4).saturate(amount: 1.4)'
+      },
+      {
         // Current Hydra source reference: gradient = vec4(_st, sin(time*speed), 1.0)
         // with speed 0 → (x, y, 0, 1); sum(scale) = vec4(vec3(v.r+v.g+v.b+v.a), _c0.a).
         // With scale = 0.25 per channel: rgb = 0.25*(x + y + 1), alpha = 1.

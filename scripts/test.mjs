@@ -47,8 +47,8 @@ console.log(`[test] using Chrome binary: ${CHROME}`)
 // and the gap receipts).
 const PORT = process.env.PORT ? Number(process.env.PORT) : await pickFreePort()
 const SWEEPS = [
-  { url: '/dev-noisemaker/pixel-parity.html', name: 'pixel-parity-64x64', expectPass: 73 },
-  { url: '/dev-noisemaker/pixel-parity.html?w=96&h=48', name: 'pixel-parity-96x48', expectPass: 73 }
+  { url: '/dev-noisemaker/pixel-parity.html', name: 'pixel-parity-64x64', expectPass: 78 },
+  { url: '/dev-noisemaker/pixel-parity.html?w=96&h=48', name: 'pixel-parity-96x48', expectPass: 78 }
 ]
 
 function pickFreePort() {
