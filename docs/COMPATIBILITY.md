@@ -2,9 +2,21 @@
 
 ## 1. Source and authority revisions
 
-Daily review: 2026-09-25. Current inspected source: [`073f16d2c94140c55433e6beeb3d76f372b93700`](https://github.com/noisefactorllc/noisemaker-for-hydra-synth/commit/073f16d2c94140c55433e6beeb3d76f372b93700).
-Full rendered parity remains **unverified**. No release approval or new closure follows from this review.
-Current upstream discovery: `bbdeb56c4b75cf33379766c3e87b0f5a18bcbba8`. Published Noisemaker authority: `1.0.179`, source `fca611fd8f91424661d4e531d39313d24ea21134`, 210 effect IDs.
+Daily review: 2026-09-30. Current inspected source: [`d1eb37de6ac81933f6dd775fa98065fde89b2d7b`](https://github.com/noisefactorllc/noisemaker-for-hydra-synth/commit/d1eb37de6ac81933f6dd775fa98065fde89b2d7b).
+Full rendered parity remains **unverified** (GAP-001). No release approval follows from this review.
+Current upstream discovery: `f24b52540af6a88d12daa05feba1a04ad61b22a2`. It sits three `LEDGER.md`-only commits past the audited range end `4f5e0d28bdc155700393c314e9a5aafcc4da91fd` (`v1.0.204`).
+Served engine core unchanged: SHA-256 `3f7a18aef5c30c75c4575db1b0c407f80fb276af447c7986f6e23e211dc15549`, Last-Modified 2026-09-29 09:11:33 GMT. Hydra authority `9d29a9f4fd8f9081b9759943f38db36f05b9a88f` equals upstream `main`.
+
+### Daily review evidence, 2026-09-30
+
+The reviewer re-executed every gate at `d1eb37d` on Linux x86_64, Node 26.5.1, headless Chromium (SwiftShader WebGL2).
+
+- `node --test test/*.test.mjs` — exit 0. 54 pass, 0 fail, 0 skip.
+- `CHROME=/usr/bin/chromium node scripts/ci-gate.mjs` — exit 0. Unit 54/54. Sweeps 71/71 exact at 64×64 and 96×48.
+- `CHROME=/usr/bin/chromium ./scripts/parity-summary` — exit 0. `PARITY-SUMMARY {"expected":142,"executed":142,"exact":142,"strict":0,"near":0,"defer":0,"skip":0,"fail":0,"missing":0}`.
+- `npm run build` — exit 0. Tracked bundles unchanged. Work tree clean after the build.
+- `npm pack --dry-run` — 61 files. `npm view noisemaker-for-hydra-synth version` — exit 1, E404. `npm whoami` — ENEEDAUTH.
+- Exact-source CI run 36581243356 at `d1eb37d`: all five jobs success. Gate artifacts record unit 54/54 and sweeps 71/71 exact at both sizes on `ubuntu-24.04` (Google Chrome 153.0.8010.52) and `macos-15` (Chromium 141.0.7390.37). The Windows, minimum-version (Chromium 129.0.6668.29), and Safari sweep jobs are green. GAP-005 closed on this evidence.
 The observations below retain their original source and authority identities. They do not qualify later updates.
 
 ### Upstream range audit, 2026-09-25
@@ -113,7 +125,7 @@ The matrix below retains the earlier measured scope. A historical verified row i
 | macOS 26.5, Chrome 153.0.8010.53, Apple M4, WebGL2 | verified | 58 exact 64×64 comparisons and four independent 64×48 comparisons. |
 | WebGPU, hydraOsc | failed | `ERR_NO_WGSL_SOURCE`. This report claims no successful WebGPU render. |
 | Current Hydra sum | verified, 2026-09-26 | The port now registers `sum` with the fixed body corroborated against the pinned Hydra authority commit `9d29a9f4fd8f9081b9759943f38db36f05b9a88f` (verbatim entry diff recorded in [workflow-evidence/gap-001/current-hydra-sum-source.txt](../workflow-evidence/gap-001/current-hydra-sum-source.txt)). Qualified by the `sum_reference` sweep case against the documented formula on a `gradient(speed: 0)` input with `scale: [0.25, 0.25, 0.25, 0.25]` — byte-exact (16,384/16,384 bytes, 0 differing). The published legacy authority bundle's `sum` body predates the upstream fix (references an undefined identifier `s`) and cannot compile, so no legacy-side pixel comparison exists for `sum`; the legacy row of the sweep excludes it for that recorded reason. |
-| Node 26.10.0 unit contracts | verified | 31 pass, zero fail, zero skip. This is separate from rendered qualification. |
+| Node unit contracts | verified | 54 pass, 0 fail, 0 skip at `d1eb37d` (Node 26.5.1 locally, 24.x in CI). Separate from rendered qualification. |
 | Packed candidate installation | verified | Local tarball installs into an isolated consumer. All 28 packed files match source. |
 | ESM and browser global entry points | verified | ESM exposes six documented exports. Global bundle exposes HydraEffects. |
 | README first useful result | verified | hydraOsc renders at 64×48. Frequency changes and native invert produce different output. |
@@ -125,17 +137,21 @@ The matrix below retains the earlier measured scope. A historical verified row i
 | Installed API through both entry points, Linux Chromium 154 headless | verified | 11 ESM-page checks and 1 bundle-page check, 0 failures: README result, frequency change, external image, S001 diagnostics, recovery, stop/start cancellation, caller-canvas resize, 12 exact create/render/dispose cycles, reinstall, removal. [Evidence](../workflow-evidence/gap-002/installed-workflow.json). |
 | External image input through the installed API | verified | `synth/media` + `updateTextureFromSource('imageTex_step_0', …)` renders a served 16×16 PNG's red/blue halves at the expected coordinates on Linux Chromium 154 headless. |
 | Seed coverage, long stateful chains | unverified | The installed run uses time 0 and short programs. |
-| Minimum browsers, Safari, Firefox, Windows, GPU-hardware Linux | unverified | Linux is measured only as Chromium 154 headless on SwiftShader WebGL2. No minimum version is declared. |
-| Registry upgrade, offline use, sustained lifecycle | unverified | Same-candidate reinstall verified; offline use is declared unsupported (engine loads from the CDN); sustained resource growth unmeasured. |
+| Minimum browsers, Safari, Firefox, Windows, GPU-hardware Linux | partial | Measured: Linux Chromium 154 headless (SwiftShader), Linux Firefox 155 (llvmpipe under Xvfb), macOS Chromium 153 (ANGLE Metal, Apple M4), Windows-2025 Chrome, and the Chromium 129 floor probe. The Safari sweep is green (71 ok, 0 fail). The Safari installed workflow and GPU-hardware Linux remain unmeasured. |
+| Registry upgrade, offline use, sustained lifecycle | partial | Registry upgrade blocked: no published version exists (E404 re-verified 2026-09-30) and this harness holds no npm publisher credential. Offline use is declared unsupported (engine loads from the CDN). Sustained lifecycle is measured: 60-cycle soaks on three hosts. |
 | Package metadata and notices | partial | 2026-09-26: metadata declares the exact SPDX identifier `AGPL-3.0-only` (verbatim AGPLv3 `LICENSE`; no later-version election in the tree; upstream publishes only the non-SPDX string `AGPL`). The changelog now documents the current module migration; the upstream history is retained for attribution. The dependency contract is declared: zero production npm dependencies, the runtime CDN engine with the rolling `/1` base path and a `{ cdn }`/`{ engine }` pinning option, browser WebGL2 runtime, Node >= 18 tooling floor. [Evidence](../workflow-evidence/gap-003/distribution-qualification.json). |
-| Source-update CI | blocked | Zero workflows and exact-source runs. No rendered gate exists. |
-| Release readiness | blocked | Complete parity, host coverage, CI, and upgrade remain unresolved; the artifact example renders (GAP-004 closed 2026-09-26). |
+| Source-update CI | verified | `rendered-parity.yml` is published on `main` and runs on every push. Run 36581243356 at `d1eb37d` is green on both parity legs (unit 54/54, sweeps 71/71 exact at both sizes, strict zero-failure gate) plus the Windows, minimum-version, and Safari sweep jobs. GAP-005 closed 2026-09-30. |
+| Release readiness | blocked | Complete parity (GAP-001), the Safari installed workflow and GPU-hardware Linux (GAP-002), and the registry upgrade (GAP-003) remain unresolved. CI is supplied (GAP-005 closed). The artifact example renders (GAP-004 closed 2026-09-26). |
 
 This module provides no editor controls. Keyboard, focus, and control-label checks do not apply to its public API.
 The packed HTML example was runtime-checked 2026-09-26 (canvas, changing output, zero page errors; [evidence](../workflow-evidence/gap-004/packed-html-verification.json)). Browser modules do not require desktop signing or notarization.
 Installed observations (retained evidence: installed-browser.json). Failures and lifecycle calls (retained evidence: distribution-and-recovery.json). Package verification (retained evidence: artifact-verification.json).
 
 ## 3. Parity coverage
+
+### Daily review, 2026-09-30
+
+The reviewer re-executed the gates at `d1eb37d`: unit 54/54, `scripts/ci-gate.mjs` exit 0 with sweeps 71/71 exact at both sizes, and `scripts/parity-summary` 142/142 exact. Exact-source CI run 36581243356 is green at the same head on both parity legs. GAP-005 closed on that evidence. Full parity remains unqualified per GAP-001.
 
 ### Daily review, 2026-09-25
 
@@ -157,6 +173,7 @@ Unknown counts remain `not measured`. Missing cases do not reduce the full-parit
 | Time-point coverage, 2026-09-27 | 71 cases per size sweep (65 prior + `osc_nonzero_time_t075`, `voronoi_src_t075`, `parameter_matrix_t075`, `parameter_matrix_color_t05`, `parameter_matrix_geometry_t06`, `parameter_matrix_combine_t075` added), rendered at 64×64 AND 96×48 | 71 + 71 | 70 + 69 | 64×64: the `rotate_animated_parameter` residual (96/16,384 bytes, max delta 1, unchanged). 96×48: the same residual (104/18,432, max delta 1) plus `hydra_to_native_read_surface` (144/18,432, max delta 1, unchanged signature) | 0 | 0 | 0 | one additional time point per parameterized and time-dependent fixture (noise `offset*time` makes the noise-offset chains time-dependent; time-invariant chains are still covered explicitly at a second time point); all six new cases byte-exact at both sizes; the catalog exposes no seed inputs so seed coverage reduces to time-point coverage; full record in [workflow-evidence/gap-001/dual-size-sweep-verification.json](../workflow-evidence/gap-001/dual-size-sweep-verification.json) | partial |
 | fp16 read-surface fix, 2026-09-28 | 71 cases per size sweep, unchanged denominator, rendered at 64×64 AND 96×48 | 71 + 71 | 70 + 70 | 64×64: the `rotate_animated_parameter` residual (96/16,384 bytes, max delta 1, unchanged). 96×48: the same residual (104/18,432, max delta 1, unchanged); `hydra_to_native_read_surface` resolved (was 144/18,432) | 0 | 0 | 0 | the served engine bundle's default `rgba16f` output-surface format applied an fp16 precision step to the builtin `io/read` plan's write target; `buildHydraShaderOverrides` now emits `readSurfaces`/`readPlans` and `compileWithHydraParity` promotes those write targets to rgba32f and retains read sources at fp32; dist bundles rebuilt and reproduced byte-for-byte; unit suite 52/0/0 including the updated fused-hydra expectations; full record in Worker Elves job 7da3130c-9f52-406c-a728-53d8fa0547bb, evidence archive read-surface-fix-verification.json (superseded 2026-09-28 by the integration candidate: the authority re-pointed the rotate fixture and delivered the downstream promotion as buildHydraShaderOverrides(compiled, promotedSurfaces) at 29cc1ee — see the row below) | partial (superseded) |
 | integration of 29cc1ee, 2026-09-28 | 71 cases per size sweep, unchanged denominator, rendered at 64x64 AND 96x48; unit suite | 71 + 71 | 71 + 71 | none — byte-exact at both sizes on Linux SwiftShader; the rotate_animated_parameter fold artifact is eliminated by the authority's fixture re-point (matched animated comparison, angle = 30.25 at t=0.25), and hydra_to_native_read_surface stays resolved via buildHydraShaderOverrides(compiled, promotedSurfaces) with contents preserved across the format migration (two dedicated unit tests) | 0 | 0 | 0 | local battery at this candidate: unit 54 pass / 0 fail / 0 skipped, npm test ALL GREEN exit 0 (71/71 both sizes, no delegation triggered); npm run build reproduces the dist bundles; the macOS GPU host additionally ran the sweep 71/71 exact at both sizes at the pre-integration fix candidate with the host checkout bound to commit and tracked-tree content hash (Worker Elves job 7da3130c-9f52-406c-a728-53d8fa0547bb, evidence host-sweep-green-8f18484.json) | full (local) |
+| Exact-source CI, 2026-09-30 | 71 cases per size sweep, both legs | 71 + 71 per leg | 71 + 71 per leg, both legs | 0 | 0 | 0 | 0 | none | verified |
 | Immutable-dependency rerun | Same 58 fixtures | 58 | 58 | 0 | 0 | 0 | 0 | Same missing effect and broader coverage | verified |
 | Independent 64×48 comparisons | 4 probes | 4 | 4 | 0 | 0 | 0 | 0 | Does not define full parameter coverage | verified |
 | Current effect inventory | 52 effect names | 52 represented by existing suite (sum by formula reference) | Not an effect-wide qualification count | not measured | 0 | not measured | not measured | sum legacy-side comparison impossible (authority bundle shader broken) | partial |
@@ -177,7 +194,7 @@ The 2026-09-26 GAP-001 candidate changed fixtures and implementation (sum reconc
 
 ## 4. Evidence
 
-Review CI boundary: No workflow run exists at the inspected source SHA. A passing export dispatch does not qualify rendered parity. Current complete-render enforcement remains an open verification requirement. Exact-source responses and workflows (retained evidence: noisemaker-for-hydra-synth-remote-evidence.json).
+Review CI boundary: No workflow run exists at the 2026-09-24 audited source SHA. A passing export dispatch does not qualify rendered parity. Complete-render enforcement is supplied since 2026-09-27 and verified 2026-09-30 (GAP-005 closed). Exact-source responses and workflows (retained evidence: noisemaker-for-hydra-synth-remote-evidence.json).
 
 The current distribution HTML independently produces `Hydra is not defined` and zero canvases in Chrome. Probe (retained evidence: hydra-synth-html-current.json).
 
@@ -208,17 +225,15 @@ The audit inspected both references on 2026-09-24. Full editor behavior does not
 
 ## 5. Open compatibility limits
 
-Next bounded check: ~~Repair the packed HTML in the implementation job, then open the npm tarball example without checkout-only files. Require a rendered first frame, editable parameters, and recovery from invalid input.~~ Resolved 2026-09-26: the packed HTML was corrected and verified from the packed tarball (GAP-004 closed). Remaining: rerun all 58 browser cases with both authority hashes recorded, then account for missing API, WGSL, and current-catalog cases.
+Next bounded check: extend the Safari automation from the sweep to the installed workflow under GAP-002. Windows and the minimum-version floor now hold green exact-source jobs.
 See the stable entries in [completion gaps](COMPLETION_GAPS.md).
 
 See [completion gaps](COMPLETION_GAPS.md#4-known-gaps) for stable IDs, dependencies, and acceptance criteria.
 
-1. Reconcile `sum`, immutable references, and full expected coverage in GAP-001.
-2. Correct the installed HTML example in GAP-004. Require useful pixels and zero page errors.
-3. Complete parameter, input, state, size, and backend qualification for GAP-001.
-4. Complete host, upgrade, and resource checks for GAP-002.
-5. Supply and check the source-update gate for GAP-005 through existing CI.
-6. Complete package metadata, notices, dependency, and release checks for GAP-003.
+1. Extend GAP-001 parameter-matrix points, the WebGPU WGSL backend, and additional-host media coverage.
+2. Extend the Safari automation to the installed workflow under GAP-002.
+3. Publish a package version through the package owner, then qualify the registry upgrade under GAP-003.
+4. Keep the source-update gate unchanged. GAP-004 and GAP-005 are closed.
 
 All eligible ports retain equal priority. Full parity requires no missing or skipped cases.
 The implementation job owns corrections. This audit does not advance the parity checkpoint.
@@ -236,6 +251,7 @@ The implementation job owns corrections. This audit does not advance the parity 
 | 2026-09-26, packed HTML fix (GAP-004 closed) | Containing commit | `dist/index.html` rewritten to the current `HydraEffects` API. Verified from the packed tarball served over HTTP: canvas present, changing output (three distinct 64×48 samples across four probes), zero page errors; bundle reproduction byte-for-byte; 46 unit passes. | Verified on Linux Chromium 154 headless only; the pixel sampler was a scratch probe wrapper not shipped or committed. [Evidence](../workflow-evidence/gap-004/packed-html-verification.json). |
 | 2026-09-26, GAP-001 sum reconciliation and sweep extension | Containing commit | `sum` reconciled to current Hydra source and registered (`isExecutableHydraEffect` no longer excludes it); dist bundles rebuilt. Sweep extended from 58 to 62 cases by adding `parameter_matrix` (noise → posterize → shift at non-default parameters, time 0.25, exact), `parameter_matrix_color` (contrast → hue → saturate at time 0.1, exact), `sum_reference` (port vs documented formula with explicit array-literal scale, 16,384/16,384 bytes exact) and `sum_default_scale` (the vec4 default `[1, 1, 1, 1]` resolved through the DSL, exact); no existing case was replaced or removed. `sum` had no legacy sweep case before (it was excluded from the generated fixtures), and the published authority bundle's `sum` body references an undefined `s` and cannot compile, so it still has no legacy-side pixel comparison — recorded in the sweep source. Receipts with exit codes: `node --test test/*.test.mjs` exit 0 — 52 pass, 0 fail; `npm run build` exit 0 (bundle SHA-256s in the machine receipt); `CHROME=/usr/bin/chromium node scripts/test.mjs` exit 1 by design — 61 ok, 1 documented residual (`rotate_animated_parameter`, 96/16,384 bytes, max delta 1, unchanged), expected >= 62; the harness records the Chrome binary provenance (`[test] using Chrome binary: /usr/bin/chromium`) and an explicitly set `CHROME` that is not executable now fails instead of falling through. The qualification gate denominator was updated to 62 (`scripts/ci-gate.mjs` `TOTAL_CASES`, `test/ci-gate-accounting.test.mjs` `TOTAL`), and `scripts/test.mjs` `expectPass` is the full denominator 62, so a silently-shrunken page cannot pass. Two stateful feedback cases were tried and not kept (`gradient.mult(src(o0))` accumulation; a converging `gradient.blend(src(o0), 0.5)` chain over 24 self-reading frames — the two engines settle into fixed points 1 byte apart on 3,475/16,384 bytes): per-frame rounding drift makes them non-byte-exact on this host; recorded as observed limits rather than shipped as failing cases. The sum comparison is formula-bound, not legacy-pixel-bound; the fixed body is corroborated in-tree against the pinned Hydra authority commit `9d29a9f4fd8f9081b9759943f38db36f05b9a88f` ([verbatim entry](../workflow-evidence/gap-001/current-hydra-sum-source.txt)). [Evidence](../workflow-evidence/gap-001/parity-sweep-extension.json). |
 | 2026-09-26, rotate residual attribution | Containing commit | Attributed the `rotate_animated_parameter` residual by controlled probes and added `rotate_animated_uniform_parameter` (suite 62 → 63; `scripts/test.mjs` `expectPass`, `scripts/ci-gate.mjs` `TOTAL_CASES` and `test/ci-gate-accounting.test.mjs` `TOTAL` updated to 63; port sources unchanged, no bundle rebuild). Probe evidence: the engine uploads exactly `30.0f` for the DSL `osc(min: 0.2, max: 0.4, speed: 1)` angle at time 0.25 (`uniform1f` interception), no float32 constant near 30 reproduces the animated render, legacy's constant-argument render matches the port's constant-argument render exactly, legacy's own function-argument render differs from its own constant-argument render by 96/16,384 bytes (max delta 1 — the residual signature inside legacy Hydra alone), and legacy's function-argument render matches the port's animated render 0/16,384. Conclusion: the residual is SwiftShader compile-time constant folding of `cos`/`sin` (legacy inlines constant arguments) vs runtime trig of a per-frame uniform — not a port translation or engine-evaluation difference. Receipts with exit codes: `node --test test/*.test.mjs` exit 0 — 52 pass, 0 fail; `CHROME=/usr/bin/chromium PORT=8899 node scripts/test.mjs` exit 1 by design — 62 ok, 1 documented residual (unchanged signature), expected >= 63. The zero-failure gate policy is unchanged and the residual policy remains unratified. [Evidence](../workflow-evidence/gap-001/rotate-residual-attribution.json). |
+| 2026-09-30, daily review | `d1eb37de6ac81933f6dd775fa98065fde89b2d7b` | Closed GAP-005 (workflow published, run 36581243356 green on both legs). Unit 54/54, gate exit 0 (71/71 at both sizes), parity-summary 142/142 exact, build reproduced, pack 61 files, registry E404. | Refreshed review headers, matrix rows, coverage rows, and next actions. Upstream `f24b5254` is `LEDGER.md`-only past the audited end. Served engine core unchanged. GAP-001, GAP-002, and GAP-003 remain open. |
 
 Initial run: `20260924-remaining-gap-documents`. Retained initial report (retained evidence: before-COMPATIBILITY.md).
 Current run: `audit-20260924-170142`. [Current operational evidence](the noisemaker-port-completion-audit evidence archive audit-20260924-170142/).
