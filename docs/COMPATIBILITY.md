@@ -2,7 +2,7 @@
 
 ## 1. Source and authority revisions
 
-Daily review: 2026-09-30. Current inspected source: [`d1eb37de6ac81933f6dd775fa98065fde89b2d7b`](https://github.com/noisefactorllc/noisemaker-for-hydra-synth/commit/d1eb37de6ac81933f6dd775fa98065fde89b2d7b).
+Daily review: 2026-09-30. Current inspected source: [`22e01bba07ce68343eab0e67e3dce3d12d7ad118`](https://github.com/noisefactorllc/noisemaker-for-hydra-synth/commit/22e01bba07ce68343eab0e67e3dce3d12d7ad118) plus this hardening commit.
 Full rendered parity remains **unverified** (GAP-001). No release approval follows from this review.
 Current upstream discovery: `f24b52540af6a88d12daa05feba1a04ad61b22a2`. It sits three `LEDGER.md`-only commits past the audited range end `4f5e0d28bdc155700393c314e9a5aafcc4da91fd` (`v1.0.204`).
 Served engine core unchanged: SHA-256 `3f7a18aef5c30c75c4575db1b0c407f80fb276af447c7986f6e23e211dc15549`, Last-Modified 2026-09-29 09:11:33 GMT. Hydra authority `9d29a9f4fd8f9081b9759943f38db36f05b9a88f` equals upstream `main`.
@@ -16,7 +16,7 @@ The reviewer re-executed every gate at `d1eb37d` on Linux x86_64, Node 26.5.1, h
 - `CHROME=/usr/bin/chromium ./scripts/parity-summary` — exit 0. `PARITY-SUMMARY {"expected":142,"executed":142,"exact":142,"strict":0,"near":0,"defer":0,"skip":0,"fail":0,"missing":0}`.
 - `npm run build` — exit 0. Tracked bundles unchanged. Work tree clean after the build.
 - `npm pack --dry-run` — 61 files. `npm view noisemaker-for-hydra-synth version` — exit 1, E404. `npm whoami` — ENEEDAUTH.
-- Exact-source CI run 36581243356 at `d1eb37d`: all five jobs success. Gate artifacts record unit 54/54 and sweeps 71/71 exact at both sizes on `ubuntu-24.04` (Google Chrome 153.0.8010.52) and `macos-15` (Chromium 141.0.7390.37). The Windows, minimum-version (Chromium 129.0.6668.29), and Safari sweep jobs are green. GAP-005 closed on this evidence.
+- Exact-source CI run 36581243356 at `d1eb37d`: all five jobs success. Gate artifacts record unit 54/54 and sweeps 71/71 exact at both sizes on `ubuntu-24.04` (Google Chrome 153.0.8010.52) and `macos-15` (Chromium 141.0.7390.37). The Windows, minimum-version (Chromium 129.0.6668.29), and Safari sweep jobs are green. GAP-005 closed on this evidence and reopened 2026-09-30. The implementation job owns the parity-summary id-set hardening. Re-closure requires its supervisor-run check on that published candidate.
 The observations below retain their original source and authority identities. They do not qualify later updates.
 
 ### Upstream range audit, 2026-09-25
@@ -140,8 +140,8 @@ The matrix below retains the earlier measured scope. A historical verified row i
 | Minimum browsers, Safari, Firefox, Windows, GPU-hardware Linux | partial | Measured: Linux Chromium 154 headless (SwiftShader), Linux Firefox 155 (llvmpipe under Xvfb), macOS Chromium 153 (ANGLE Metal, Apple M4), Windows-2025 Chrome, and the Chromium 129 floor probe. The Safari sweep is green (71 ok, 0 fail). The Safari installed workflow and GPU-hardware Linux remain unmeasured. |
 | Registry upgrade, offline use, sustained lifecycle | partial | Registry upgrade blocked: no published version exists (E404 re-verified 2026-09-30) and this harness holds no npm publisher credential. Offline use is declared unsupported (engine loads from the CDN). Sustained lifecycle is measured: 60-cycle soaks on three hosts. |
 | Package metadata and notices | partial | 2026-09-26: metadata declares the exact SPDX identifier `AGPL-3.0-only` (verbatim AGPLv3 `LICENSE`; no later-version election in the tree; upstream publishes only the non-SPDX string `AGPL`). The changelog now documents the current module migration; the upstream history is retained for attribution. The dependency contract is declared: zero production npm dependencies, the runtime CDN engine with the rolling `/1` base path and a `{ cdn }`/`{ engine }` pinning option, browser WebGL2 runtime, Node >= 18 tooling floor. [Evidence](../workflow-evidence/gap-003/distribution-qualification.json). |
-| Source-update CI | verified | `rendered-parity.yml` is published on `main` and runs on every push. Run 36581243356 at `d1eb37d` is green on both parity legs (unit 54/54, sweeps 71/71 exact at both sizes, strict zero-failure gate) plus the Windows, minimum-version, and Safari sweep jobs. GAP-005 closed 2026-09-30. |
-| Release readiness | blocked | Complete parity (GAP-001), the Safari installed workflow and GPU-hardware Linux (GAP-002), and the registry upgrade (GAP-003) remain unresolved. CI is supplied (GAP-005 closed). The artifact example renders (GAP-004 closed 2026-09-26). |
+| Source-update CI | verified | `rendered-parity.yml` is published on `main` and runs on every push. Run 36581243356 at `d1eb37d` is green on both parity legs (unit 54/54, sweeps 71/71 exact at both sizes, strict zero-failure gate) plus the Windows, minimum-version, and Safari sweep jobs. GAP-005 closed 2026-09-30 and reopened the same day. The implementation job owns the parity-summary id-set hardening. |
+| Release readiness | blocked | Complete parity (GAP-001), the Safari installed workflow and GPU-hardware Linux (GAP-002), and the registry upgrade (GAP-003) remain unresolved. The GAP-005 re-closure check is also open. CI runs green (GAP-005 reopened). The artifact example renders (GAP-004 closed 2026-09-26). |
 
 This module provides no editor controls. Keyboard, focus, and control-label checks do not apply to its public API.
 The packed HTML example was runtime-checked 2026-09-26 (canvas, changing output, zero page errors; [evidence](../workflow-evidence/gap-004/packed-html-verification.json)). Browser modules do not require desktop signing or notarization.
@@ -151,7 +151,7 @@ Installed observations (retained evidence: installed-browser.json). Failures and
 
 ### Daily review, 2026-09-30
 
-The reviewer re-executed the gates at `d1eb37d`: unit 54/54, `scripts/ci-gate.mjs` exit 0 with sweeps 71/71 exact at both sizes, and `scripts/parity-summary` 142/142 exact. Exact-source CI run 36581243356 is green at the same head on both parity legs. GAP-005 closed on that evidence. Full parity remains unqualified per GAP-001.
+The reviewer re-executed the gates at `d1eb37d`: unit 54/54, `scripts/ci-gate.mjs` exit 0 with sweeps 71/71 exact at both sizes, and `scripts/parity-summary` 142/142 exact. Exact-source CI run 36581243356 is green at the same head on both parity legs. GAP-005 closed on that evidence and reopened 2026-09-30. The implementation job owns the parity-summary id-set hardening. Full parity remains unqualified per GAP-001.
 
 ### Daily review, 2026-09-25
 
@@ -194,7 +194,7 @@ The 2026-09-26 GAP-001 candidate changed fixtures and implementation (sum reconc
 
 ## 4. Evidence
 
-Review CI boundary: No workflow run exists at the 2026-09-24 audited source SHA. A passing export dispatch does not qualify rendered parity. Complete-render enforcement is supplied since 2026-09-27 and verified 2026-09-30 (GAP-005 closed). Exact-source responses and workflows (retained evidence: noisemaker-for-hydra-synth-remote-evidence.json).
+Review CI boundary: No workflow run exists at the 2026-09-24 audited source SHA. A passing export dispatch does not qualify rendered parity. Complete-render enforcement is supplied since 2026-09-27 and verified 2026-09-30. GAP-005 then reopened. The parity-summary id-set hardening belongs to the implementation job. Exact-source responses and workflows (retained evidence: noisemaker-for-hydra-synth-remote-evidence.json).
 
 The current distribution HTML independently produces `Hydra is not defined` and zero canvases in Chrome. Probe (retained evidence: hydra-synth-html-current.json).
 
@@ -233,7 +233,7 @@ See [completion gaps](COMPLETION_GAPS.md#4-known-gaps) for stable IDs, dependenc
 1. Extend GAP-001 parameter-matrix points, the WebGPU WGSL backend, and additional-host media coverage.
 2. Extend the Safari automation to the installed workflow under GAP-002.
 3. Publish a package version through the package owner, then qualify the registry upgrade under GAP-003.
-4. Keep the source-update gate unchanged. GAP-004 and GAP-005 are closed.
+4. Keep the source-update gate unchanged. GAP-004 is closed. The implementation job hardens `scripts/parity-summary` with id-set validation. GAP-005 re-closes through the supervisor-run check on that published candidate.
 
 All eligible ports retain equal priority. Full parity requires no missing or skipped cases.
 The implementation job owns corrections. This audit does not advance the parity checkpoint.
