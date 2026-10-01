@@ -103,7 +103,7 @@ Delivered range: noisefactorllc/noisemaker `73c15be00d6888f4b5d2835d8e242ee9e840
 - Upstream tag correlation: `git ls-remote --tags origin` maps `v1.0.205`→`a0e9bbffc038`, `v1.0.206`→`e24c844f8dad`, `v1.0.207`→`16c1997cd551`, and `v1.0.208`→`ed478159e5a3`, so the continuation is on the upstream release line.
 - Test receipts at this candidate (this host: Debian 12, Node 26.5.1, Chromium headless WebGL2/SwiftShader): `node --test test/*.test.mjs` — 77 pass, 0 fail. `node scripts/test.mjs` — 78 ok, 0 fail at 64×64 and 78 ok, 0 fail at 96×48; the script reports ALL GREEN. Full record in Worker Elves job 7ecaa2ab-1a1f-4831-8d24-61c80383342b, evidence archive upstream-audit-2026-09-30-hydra.md.
 
-### Upstream range audit, 2026-10-01 (e24c844f..cb22a05eff9a continuation)
+### Upstream range audit, 2026-10-01, e24c844f..cb22a05eff9a continuation
 
 Delivered range: noisefactorllc/noisemaker `e24c844f8dada85551ab084f41db8944fbc176c8..cb22a05eff9afed99fcf22a482b944c26f43e814` (forced trigger), with observed range `f5ca07cda9e4473485e6a6f6b34e553274e2659b..cb22a05eff9a`. The range was audited against a full local clone of the upstream repository (clone HEAD `cb22a05eff9a` on `main`, fetched 2026-10-01) rather than assumed. Recorded facts, each reproducible with the stated command against that clone:
 
