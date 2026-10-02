@@ -63,13 +63,19 @@ function run(cmd, args, opts = {}) {
   return execFileSync(cmd, args, { encoding: 'utf8', ...opts })
 }
 
-function commandReceipt(cmd, args, opts = {}, cwd = REPO) {
+// Runs a command exactly once and returns its receipt plus outcome, so the
+// recorded exit_code describes the only execution (never a second rerun).
+function runReceipt(cmd, args, opts = {}, cwd = REPO) {
   const result = spawnSync(cmd, args, { encoding: 'utf8', cwd, ...opts })
   return {
-    command: [cmd, ...args].join(' '),
-    cwd: relativeHome(cwd),
-    exit_code: result.status,
-    stderr_tail: (result.stderr || '').split('\n').filter(Boolean).slice(-5)
+    receipt: {
+      command: [cmd, ...args].join(' '),
+      cwd: relativeHome(cwd),
+      exit_code: result.status,
+      stderr_tail: (result.stderr || '').split('\n').filter(Boolean).slice(-5)
+    },
+    status: result.status,
+    stdout: result.stdout || ''
   }
 }
 
@@ -87,7 +93,14 @@ function repoTrackedHashes() {
 // Receipt paths stay relative to $HOME so the evidence never names a
 // specific machine's user directory.
 const HOME = process.env.HOME || ''
-const relativeHome = p => (HOME && p.startsWith(HOME) ? join('~', p.slice(HOME.length)) : p)
+const relativeHome = p => {
+  if (HOME && p.startsWith(HOME)) return join('~', p.slice(HOME.length))
+  // Sandboxed runners may not export HOME; any checkout under .../repos/
+  // is still home-relative once the machine prefix is dropped.
+  const i = p.indexOf('/repos/')
+  if (i > 0) return '~' + p.slice(i)
+  return p
+}
 
 async function runPage(browser, url, name) {
   const context = await browser.newContext({ viewport: { width: 1024, height: 1024 } })
@@ -120,7 +133,13 @@ async function runPage(browser, url, name) {
     if (retry != null) summary = parseSummary(retry)
   }
   await context.close()
-  return { page: name, url, ...summary, console_errors: consoleErrors, page_errors: pageErrors }
+  // Native browser resource errors (for example WebKit's "too many active
+  // WebGL contexts" eviction notice) arrive as console messages without a
+  // JS console.error call, so the page fixture cannot capture them; the
+  // harness fails the run on any of them.
+  const resourceErrors = [...consoleErrors, ...pageErrors]
+    .filter(e => /active WebGL contexts|context (already )?lost|INVALID_OPERATION/i.test(e))
+  return { page: name, url, ...summary, console_errors: consoleErrors, page_errors: pageErrors, resource_errors: resourceErrors }
 }
 
 async function main() {
@@ -133,7 +152,10 @@ async function main() {
     node: process.version,
     platform: `${process.platform} ${process.arch}` + (spawnSync('sw_vers', ['-productVersion'], { encoding: 'utf8' }).stdout?.trim() ? ' macOS ' + spawnSync('sw_vers', ['-productVersion'], { encoding: 'utf8' }).stdout.trim() : ''),
     repo: relativeHome(REPO),
-    repo_git_head: spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).stdout.trim(),
+    repo_git_head: (() => {
+      const head = spawnSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' })
+      return head.status === 0 ? head.stdout.trim() : null
+    })(),
     commands: [],
     runs: [],
     reinstall: null,
@@ -151,8 +173,10 @@ async function main() {
   try {
     // Pack the candidate from the checkout.
     const packArgs = ['pack', '--json', '--pack-destination', packDir]
-    const packJson = JSON.parse(run('npm', packArgs, { cwd: REPO }))
-    evidence.commands.push(commandReceipt('npm', packArgs))
+    const packRun = runReceipt('npm', packArgs)
+    assert.equal(packRun.status, 0, 'npm pack failed')
+    evidence.commands.push(packRun.receipt)
+    const packJson = JSON.parse(packRun.stdout)
     const tarball = resolve(join(packDir, packJson[0].filename))
     assert.ok(existsSync(tarball), 'npm pack produced a tarball')
     evidence.pack = { tarball: tarball, filename: packJson[0].filename, file_count: packJson[0].files ? packJson[0].files.length : null, size_bytes: packJson[0].size }
@@ -162,8 +186,9 @@ async function main() {
     // installs into the repository itself.
     const installArgs = ['install', '--ignore-scripts', '--bin-links=false', '--no-audit', '--no-fund', tarball]
     run('npm', ['init', '-y'], { cwd: consumer })
-    run('npm', installArgs, { cwd: consumer })
-    evidence.commands.push(commandReceipt('npm', installArgs, {}, consumer))
+    const installRun = runReceipt('npm', installArgs, {}, consumer)
+    assert.equal(installRun.status, 0, 'npm install failed')
+    evidence.commands.push(installRun.receipt)
     const installed = JSON.parse(readFileSync(join(consumer, 'node_modules', 'noisemaker-for-hydra-synth', 'package.json'), 'utf8'))
     assert.equal(installed.name, 'noisemaker-for-hydra-synth')
     evidence.installed = { name: installed.name, version: installed.version }
@@ -192,10 +217,10 @@ async function main() {
     const browser = await webkit.launch({ headless: true })
     evidence.browser_version = browser.version()
     try {
-      for (const [page, expectOk] of [['workflow.html', 11], ['bundle.html', 1]]) {
+      for (const [page, expectOk] of [['workflow.html', 13], ['bundle.html', 1]]) {
         const result = await runPage(browser, `http://127.0.0.1:${port}/${page}?cycles=${CYCLES}`, page)
         result.expected_ok_minimum = expectOk
-        result.pass = result.fail === 0 && result.ok >= expectOk
+        result.pass = result.fail === 0 && result.ok >= expectOk && (result.resource_errors || []).length === 0
         evidence.runs.push(result)
       }
     } finally {
@@ -204,17 +229,15 @@ async function main() {
     server.kill('SIGTERM')
 
     // Reinstall over the existing installation.
-    const reinstallReceipt = commandReceipt('npm', installArgs, {}, consumer)
-    run('npm', installArgs, { cwd: consumer })
+    const reinstallRun = runReceipt('npm', installArgs, {}, consumer)
     const reinstalledIntact = existsSync(join(consumer, 'node_modules', 'noisemaker-for-hydra-synth', 'src', 'index.js'))
-    evidence.reinstall = { ...reinstallReceipt, package_intact: reinstalledIntact, pass: reinstallReceipt.exit_code === 0 && reinstalledIntact }
+    evidence.reinstall = { ...reinstallRun.receipt, package_intact: reinstalledIntact, pass: reinstallRun.status === 0 && reinstalledIntact }
 
     // Removal.
     const uninstallArgs = ['uninstall', '--ignore-scripts', '--bin-links=false', '--no-audit', '--no-fund', 'noisemaker-for-hydra-synth']
-    const uninstallReceipt = commandReceipt('npm', uninstallArgs, {}, consumer)
-    run('npm', uninstallArgs, { cwd: consumer })
+    const uninstallRun = runReceipt('npm', uninstallArgs, {}, consumer)
     const absent = !existsSync(join(consumer, 'node_modules', 'noisemaker-for-hydra-synth'))
-    evidence.removal = { ...uninstallReceipt, package_absent: absent, pass: uninstallReceipt.exit_code === 0 && absent }
+    evidence.removal = { ...uninstallRun.receipt, package_absent: absent, pass: uninstallRun.status === 0 && absent }
   } finally {
     rmSync(scratch, { recursive: true, force: true })
   }

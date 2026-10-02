@@ -162,7 +162,7 @@ test('installed package workflow: pack, install, exercise, reinstall, remove', a
   }
   assert.ok(up, 'consumer server started')
 
-  for (const [page, expectOk] of [['workflow.html', 11], ['bundle.html', 1]]) {
+  for (const [page, expectOk] of [['workflow.html', 13], ['bundle.html', 1]]) {
     const summary = parseDomSummary(runChromeDump(`http://127.0.0.1:${port}/${page}`))
     assert.equal(summary.fail, 0, `${page} failures: ${summary.failures.join(' | ')}`)
     assert.ok(summary.ok >= expectOk, `${page} ok ${summary.ok} < expected ${expectOk}`)

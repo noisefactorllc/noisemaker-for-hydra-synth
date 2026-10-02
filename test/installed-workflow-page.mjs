@@ -118,10 +118,34 @@ const sample = (data, canvas, x, y) => {
 }
 
 export const MODULE_PAGE_BODY = `try {
+  // Unexpected-error capture: every console.error other than the expected
+  // S001 recompilation diagnostic is collected, and unplanned WebGL context
+  // losses (a context evicted before this page chose to lose it) are
+  // recorded from the webglcontextlost events native eviction notices fire —
+  // both checks fail the workflow on resource exhaustion or unexpected
+  // engine errors.
+  const unexpectedErrors = []
+  const consoleError = console.error.bind(console)
+  console.error = (...a) => {
+    const m = a.map(String).join(' ')
+    if (!/Recompilation failed/.test(m)) unexpectedErrors.push(m)
+    consoleError(...a)
+  }
   const { DEFAULT_CDN, loadHydraEffects } = await import('./node_modules/noisemaker-for-hydra-synth/src/index.js')
   const canvas = document.createElement('canvas')
   canvas.width = 64; canvas.height = 48
   document.body.appendChild(canvas)
+  // Unplanned WebGL context losses: a context evicted by the browser before
+  // this page's own loseContext call (native eviction notices fire
+  // webglcontextlost) is recorded; dispose() marks the canvas just before
+  // losing its context so the planned loss is not counted.
+  const contextLosses = []
+  const trackContextLoss = c => {
+    c.addEventListener('webglcontextlost', () => {
+      if (!c.dataset.losing) contextLosses.push(c === canvas ? 'main canvas' : 'cycle canvas')
+    })
+  }
+  trackContextLoss(canvas)
   const engine = await loadHydraEffects()
   const renderer = new engine.CanvasRenderer({
     canvas, basePath: DEFAULT_CDN, bundlePath: DEFAULT_CDN + '/effects',
@@ -229,6 +253,7 @@ export const MODULE_PAGE_BODY = `try {
     const c = document.createElement('canvas')
     c.width = 64; c.height = 48
     document.body.appendChild(c)
+    trackContextLoss(c)
     const r = new engine.CanvasRenderer({
       canvas: c, basePath: DEFAULT_CDN, bundlePath: DEFAULT_CDN + '/effects',
       useBundles: true, preferWebGPU: false, autoStart: false
@@ -248,11 +273,23 @@ export const MODULE_PAGE_BODY = `try {
       for (let j = 0; j < cycleBaseline.length; j++) if (cycleBaseline[j] !== frame.data[j]) delta++
       if (delta === 0) cyclesExact++
     }
+    c.dataset.losing = '1'
     try { await r.dispose({ loseContext: true }) } catch (e) { disposeFailures.push(errorText(e)) }
     r.stop()
+    // Remove the cycle canvas: a canvas still attached to the DOM is never
+    // garbage-collected, so its WebGL context counts against the browser's
+    // active-context limit and later cycles get force-evicted ("too many
+    // active WebGL contexts"). Detach after dispose, then settle so the
+    // browser can reclaim the context before the next cycle creates one —
+    // WebKit in particular only reclaims lost contexts at GC, which needs
+    // an event-loop turn.
+    c.remove()
+    await sleep(120)
   }
   check('repeated_lifecycle_exact_cycles', cyclesExact === CYCLES, cyclesExact + '/' + CYCLES + ' exact')
   check('repeated_lifecycle_dispose', disposeFailures.length === 0, disposeFailures.join('; '))
+  check('no_unexpected_console_errors', unexpectedErrors.length === 0, unexpectedErrors.slice(0, 3).join('; '))
+  check('no_forced_context_loss', contextLosses.length === 0, contextLosses.join('; '))
   window.__finish()
 } catch (error) {
   window.__error(error)
