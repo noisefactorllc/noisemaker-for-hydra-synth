@@ -64,6 +64,15 @@ export function encodeTestPng(width, height) {
   ])
 }
 
+// The ONLY console error the installed-workflow pages exempt from
+// no_unexpected_console_errors: the complete expected S001 diagnostic.
+// Anchored at both ends with bounded numeric fields, so any other
+// recompilation failure — or this diagnostic with extra appended text —
+// is captured and fails the workflow. Serialized into the page body so
+// the page and this predicate share one implementation.
+export const isExpectedS001Diagnostic = m =>
+  /^Recompilation failed: Unknown effect: 'hydraMissing'; write\(\) requires an input - cannot be first in chain: '\[Write\]' \(line \d+, col \d+\)$/.test(m)
+
 export function pageHtml(preload) {
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8" />
@@ -126,12 +135,13 @@ export const MODULE_PAGE_BODY = `try {
   // engine errors.
   const unexpectedErrors = []
   const consoleError = console.error.bind(console)
+  const isExpectedS001 = ${String(isExpectedS001Diagnostic)}
   console.error = (...a) => {
     const m = a.map(String).join(' ')
     // The expected S001 diagnostic is the ONLY exempt console error; any
-    // other recompilation failure is captured and fails
-    // no_unexpected_console_errors.
-    if (!/Recompilation failed: Unknown effect: 'hydraMissing'/.test(m)) unexpectedErrors.push(m)
+    // other recompilation failure — or that diagnostic with extra text —
+    // is captured and fails no_unexpected_console_errors.
+    if (!isExpectedS001(m)) unexpectedErrors.push(m)
     consoleError(...a)
   }
   const { DEFAULT_CDN, loadHydraEffects } = await import('./node_modules/noisemaker-for-hydra-synth/src/index.js')
