@@ -91,6 +91,13 @@ const check = (name, pass, detail) => {
   const gl = probe.getContext('webgl2')
   const ext = gl && gl.getExtension('WEBGL_debug_renderer_info')
   emit('info webgl_renderer ' + (gl ? (ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)) : 'unavailable'))
+  if (gl) {
+    // The probe context is transient: lose it and detach the canvas so it
+    // does not count against the browser's active-context limit for the rest
+    // of the run.
+    gl.getExtension('WEBGL_lose_context').loseContext()
+    probe.remove()
+  }
 }
 const errorText = error => {
   if (Array.isArray(error?.diagnostics) && error.diagnostics.length > 0) return error.diagnostics.map(d => d?.message || JSON.stringify(d)).join('; ')
@@ -101,12 +108,16 @@ const errorText = error => {
 window.__finish = () => emit('=== ' + ok + ' ok, ' + fail + ' fail / ' + (ok + fail) + ' total ===')
 window.__error = error => { emit('THROW page -> ' + errorText(error)); emit('=== ' + ok + ' ok, ' + (fail + 1) + ' fail / ' + (ok + fail + 1) + ' total ===') }
 
+// One shared 2d canvas serves every pixel readback: creating a fresh 2d
+// canvas + context per call retains one extra context per call (the browser
+// never reclaims them mid-run), which doubles the page's active-context
+// count under sustained soaks and triggers WebKit's forced evictions.
+const shared2d = document.createElement('canvas')
+const shared2dCtx = shared2d.getContext('2d', { willReadFrequently: true })
 const meaningful = (canvas, threshold = 5000) => {
-  const copy = document.createElement('canvas')
-  copy.width = canvas.width; copy.height = canvas.height
-  const ctx = copy.getContext('2d', { willReadFrequently: true })
-  ctx.drawImage(canvas, 0, 0)
-  const data = ctx.getImageData(0, 0, copy.width, copy.height).data
+  shared2d.width = canvas.width; shared2d.height = canvas.height
+  shared2dCtx.drawImage(canvas, 0, 0)
+  const data = shared2dCtx.getImageData(0, 0, shared2d.width, shared2d.height).data
   let lit = 0
   for (let i = 0; i < data.length; i += 4) if (data[i] + data[i + 1] + data[i + 2] > 0) lit++
   window.__lastPixels = data
