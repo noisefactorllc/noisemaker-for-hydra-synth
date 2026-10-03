@@ -37,6 +37,11 @@ const flag = name => {
 }
 const BROWSER = flag('browser') || 'firefox'
 const CYCLES = Number(flag('cycles')) || 12
+// Optional same-package upgrade leg: materialize a prior published revision
+// of this repository (git archive of <revision>), pack it, and install it
+// into the consumer before the candidate tarball is installed over it, so
+// the measured install is an upgrade-over rather than a fresh install.
+const UPGRADE_FROM = flag('upgrade-from')
 const EXTRA_ARGS = (flag('browser-args') || process.env.BROWSER_ARGS || '').split(',').map(s => s.trim()).filter(Boolean)
 const OUTPUT = flag('output') || `workflow-evidence/gap-002/installed-workflow-${BROWSER}-${CYCLES}cycles.json`
 const REPO = process.cwd()
@@ -153,6 +158,63 @@ async function main() {
   mkdirSync(consumer)
   mkdirSync(packDir)
   try {
+    // Shared consumer preparation (also used by the upgrade-over leg).
+    writeFileSync(join(consumer, 'input-image.png'), encodeTestPng(16, 16))
+    run('npm', ['init', '-y'], { cwd: consumer })
+    // Optional upgrade-over preparation: pack a prior published revision and
+    // install it into the consumer first. The candidate install below then
+    // measures an upgrade (install over an existing installation), not a
+    // fresh install.
+    if (UPGRADE_FROM) {
+      const priorDir = join(scratch, 'prior')
+      mkdirSync(priorDir)
+      const archivePath = join(scratch, 'prior.tar')
+      // Binary archive: write to a file (never round-trip through a decoded
+      // stdout string, which corrupts tar bytes).
+      const archiveRun = runReceipt('git', ['archive', '--format=tar', '-o', archivePath, UPGRADE_FROM], { maxBuffer: 256 * 1024 * 1024 }, REPO)
+      assert.equal(archiveRun.status, 0, 'git archive of the prior revision failed')
+      execFileSync('tar', ['-xf', archivePath, '-C', priorDir])
+      evidence.commands.push({ command: `git archive --format=tar -o ${archivePath} ${UPGRADE_FROM} && tar -xf ${archivePath} -C ${priorDir}`, cwd: REPO, exit_code: 0 })
+      // Pack the prior into its own destination so the candidate pack cannot
+      // overwrite its tarball (both would otherwise share one filename).
+      const priorPackDir = join(packDir, 'prior')
+      mkdirSync(priorPackDir)
+      const priorPackRun = runReceipt('npm', ['pack', '--json', '--pack-destination', priorPackDir], {}, priorDir)
+      assert.equal(priorPackRun.status, 0, 'npm pack of the prior revision failed')
+      evidence.commands.push(priorPackRun.receipt)
+      const priorJson = JSON.parse(priorPackRun.stdout)
+      const priorTarball = resolve(join(priorPackDir, priorJson[0].filename))
+      assert.ok(existsSync(priorTarball), 'prior revision tarball exists')
+      // Content discriminator: a file that differs between the prior revision
+      // and this checkout, so the post-over-install tree can be proven to be
+      // the candidate's content (the version string alone cannot discriminate
+      // same-version revisions).
+      const discriminator = 'test/installed-workflow-page.mjs'
+      const sha256 = p => createHash('sha256').update(readFileSync(p)).digest('hex')
+      const priorSha = sha256(join(priorDir, discriminator))
+      const candidateSha = sha256(join(REPO, discriminator))
+      assert.notEqual(priorSha, candidateSha, 'discriminator must differ between revisions')
+      const priorInstallRun = runReceipt('npm', ['install', '--ignore-scripts', '--bin-links=false', '--no-audit', '--no-fund', priorTarball], {}, consumer)
+      assert.equal(priorInstallRun.status, 0, 'npm install of the prior revision failed')
+      evidence.commands.push(priorInstallRun.receipt)
+      const priorInstalledSha = sha256(join(consumer, 'node_modules', 'noisemaker-for-hydra-synth', discriminator))
+      assert.equal(priorInstalledSha, priorSha, 'prior install carries the prior revision content')
+      const priorInstalled = JSON.parse(readFileSync(join(consumer, 'node_modules', 'noisemaker-for-hydra-synth', 'package.json'), 'utf8'))
+      assert.equal(priorInstalled.name, 'noisemaker-for-hydra-synth')
+      evidence.upgrade = {
+        from_revision: UPGRADE_FROM,
+        prior_tarball: priorJson[0].filename,
+        prior_version: priorInstalled.version,
+        prior_installed: true,
+        discriminator: {
+          file: discriminator,
+          prior_sha256: priorSha,
+          prior_installed_sha256: priorInstalledSha,
+          candidate_sha256: candidateSha
+        }
+      }
+    }
+
     // Pack the candidate from the checkout.
     const packArgs = ['pack', '--json', '--pack-destination', packDir]
     const packRun = runReceipt('npm', packArgs)
@@ -163,20 +225,28 @@ async function main() {
     assert.ok(existsSync(tarball), 'npm pack produced a tarball')
     evidence.pack = { tarball: tarball, filename: packJson[0].filename, file_count: packJson[0].files ? packJson[0].files.length : null, size_bytes: packJson[0].size }
 
-    // Install into an isolated consumer.
+    // Install into an isolated consumer (the consumer root was already
+    // prepared above, so npm never walks up out of the scratch consumer and
+    // installs into the repository itself).
     const installArgs = ['install', '--ignore-scripts', '--bin-links=false', '--no-audit', '--no-fund', tarball]
-    // Give the consumer an explicit package root so npm never walks up out of
-    // the scratch consumer and installs into the repository itself.
-    run('npm', ['init', '-y'], { cwd: consumer })
     const installRun = runReceipt('npm', installArgs, {}, consumer)
     assert.equal(installRun.status, 0, 'npm install failed')
     evidence.commands.push(installRun.receipt)
     const installed = JSON.parse(readFileSync(join(consumer, 'node_modules', 'noisemaker-for-hydra-synth', 'package.json'), 'utf8'))
     assert.equal(installed.name, 'noisemaker-for-hydra-synth')
     evidence.installed = { name: installed.name, version: installed.version }
+    if (evidence.upgrade) {
+      // The candidate install ran over the prior revision's installation;
+      // prove the installed tree now carries the candidate's content via the
+      // revision discriminator.
+      const installedSha = createHash('sha256').update(readFileSync(join(consumer, 'node_modules', 'noisemaker-for-hydra-synth', evidence.upgrade.discriminator.file))).digest('hex')
+      evidence.upgrade.discriminator.over_installed_sha256 = installedSha
+      evidence.upgrade.discriminator.matches_candidate = installedSha === evidence.upgrade.discriminator.candidate_sha256
+      evidence.upgrade.candidate_version = installed.version
+      evidence.upgrade.over_install = { receipt: installRun.receipt, pass: installRun.status === 0 && evidence.upgrade.discriminator.matches_candidate }
+    }
 
     // Consumer fixtures.
-    writeFileSync(join(consumer, 'input-image.png'), encodeTestPng(16, 16))
     writeFileSync(join(consumer, 'workflow.html'), pageHtml('') + MODULE_PAGE_BODY)
     writeFileSync(join(consumer, 'bundle.html'), pageHtml(
       '<script src="./node_modules/noisemaker-for-hydra-synth/dist/hydra-synth.js"></script>'
@@ -257,6 +327,7 @@ try {
     pass: unchanged
   }
   evidence.all_pass = evidence.runs.every(r => r.pass) && evidence.reinstall.pass && evidence.removal.pass && unchanged
+    && (!evidence.upgrade || (evidence.upgrade.over_install.pass && evidence.upgrade.prior_installed && evidence.upgrade.discriminator.matches_candidate))
   writeFileSync(join(REPO, OUTPUT), JSON.stringify(evidence, null, 2) + '\n')
   console.log(JSON.stringify({ output: OUTPUT, all_pass: evidence.all_pass, browser: BROWSER, version: evidence.browser_version, runs: evidence.runs.map(r => ({ page: r.page, ok: r.ok, fail: r.fail, renderer: r.renderer })) }, null, 2))
   if (!evidence.all_pass) process.exit(1)
