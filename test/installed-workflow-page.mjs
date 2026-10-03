@@ -128,7 +128,10 @@ export const MODULE_PAGE_BODY = `try {
   const consoleError = console.error.bind(console)
   console.error = (...a) => {
     const m = a.map(String).join(' ')
-    if (!/Recompilation failed/.test(m)) unexpectedErrors.push(m)
+    // The expected S001 diagnostic is the ONLY exempt console error; any
+    // other recompilation failure is captured and fails
+    // no_unexpected_console_errors.
+    if (!/Recompilation failed: Unknown effect: 'hydraMissing'/.test(m)) unexpectedErrors.push(m)
     consoleError(...a)
   }
   const { DEFAULT_CDN, loadHydraEffects } = await import('./node_modules/noisemaker-for-hydra-synth/src/index.js')
