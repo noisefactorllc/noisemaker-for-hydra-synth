@@ -588,7 +588,7 @@ test('installs Hydra overrides and restores native Noisemaker surface precision'
 
   await renderer.compile('hydra source')
   assert.ok(renderer.calls[0][1].shaderOverrides[1].brightness)
-  assert.equal(renderer.pipeline.backend.textures.get('global_o0_read').format, 'rgba32f')
+  assert.equal(renderer.pipeline.backend.textures.get('global_o0_read').format, 'rgba8')
   assert.equal(
     renderer.pipeline.graph.passes[0].uniforms._hydra_1_amount,
     oscillator
@@ -614,7 +614,7 @@ test('installs Hydra overrides and restores native Noisemaker surface precision'
     }
   ])
   await renderer.compile('mixed prev with native final node')
-  assert.equal(renderer.pipeline.backend.textures.get('global_o0_read').format, 'rgba32f')
+  assert.equal(renderer.pipeline.backend.textures.get('global_o0_read').format, 'rgba8')
   assert.equal(renderer.pipeline.backend.textures.get('global_o0_read').value, 'hydra frame')
 
   compiled = compiledPlan([{
@@ -625,7 +625,7 @@ test('installs Hydra overrides and restores native Noisemaker surface precision'
     builtin: true
   }], 'o1')
   await renderer.compile('native read of Hydra surface')
-  assert.equal(renderer.pipeline.backend.textures.get('global_o0_read').format, 'rgba32f')
+  assert.equal(renderer.pipeline.backend.textures.get('global_o0_read').format, 'rgba8')
   assert.equal(renderer.pipeline.backend.textures.get('global_o0_read').value, 'hydra frame')
 
   compiled = native
@@ -641,7 +641,7 @@ test('installs Hydra overrides and restores native Noisemaker surface precision'
     temp: 0
   }])
   await renderer.compile('prev after native source')
-  assert.equal(renderer.pipeline.backend.textures.get('global_o0_read').format, 'rgba32f')
+  assert.equal(renderer.pipeline.backend.textures.get('global_o0_read').format, 'rgba8')
   assert.equal(renderer.pipeline.backend.textures.get('global_o0_read').value, 'native frame')
 })
 
@@ -715,12 +715,12 @@ test('createSurfaces retains promoted surface format during recompilation', asyn
   const renderer = new engine.CanvasRenderer()
 
   await renderer.compile('hydra to o1')
-  assert.equal(textures.get('global_o1_read').format, 'rgba32f')
+  assert.equal(textures.get('global_o1_read').format, 'rgba8')
   textures.get('global_o1_read').value = 'pixel-data'
 
   compiled = readSource
   await renderer.compile('read o1 into o0')
-  assert.equal(textures.get('global_o1_read').format, 'rgba32f')
+  assert.equal(textures.get('global_o1_read').format, 'rgba8')
   assert.equal(textures.get('global_o1_read').value, 'pixel-data')
 })
 
@@ -799,10 +799,10 @@ test('pre-compilation backup preserves surface data across format migration', as
   assert.equal(textures.get('global_o0_read').format, 'rgba16f')
   textures.get('global_o0_read').value = 'pre-migration-data'
 
-  // Compile hydra.prev which promotes o0 to rgba32f and preserves existing o0
+  // Compile hydra.prev which promotes o0 to rgba8 and preserves existing o0
   compiled = hydraPrevSource
   await renderer.compile('hydra prev')
-  assert.equal(textures.get('global_o0_read').format, 'rgba32f')
+  assert.equal(textures.get('global_o0_read').format, 'rgba8')
   assert.equal(textures.get('global_o0_read').value, 'pre-migration-data')
   assert.ok(copyOperations.length >= 2, 'Expected backup and restore copyTexture operations')
 })

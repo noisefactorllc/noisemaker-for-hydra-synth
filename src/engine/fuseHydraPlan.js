@@ -15,10 +15,15 @@ export const EFFECTS = new Map(
 const INSTALLED = Symbol('hydraCompilerInstalled')
 const PROMOTED_SURFACES = new WeakMap()
 let surfaceBackupIndex = 0
+// Hydra output surfaces are 8-bit, like legacy Hydra's output framebuffers
+// (regl textures with the default uint8 type): every write rounds to 8 bits,
+// so a chain that reads its own output (src(o0) feedback) rounds each frame
+// exactly as legacy Hydra does. A float surface keeps the unrounded value and
+// settles one step away over a converging feedback sequence.
 const HYDRA_SURFACE_SPEC = Object.freeze({
   width: 'screen',
   height: 'screen',
-  format: 'rgba32f',
+  format: 'rgba8',
   usage: ['render', 'sample', 'copySrc', 'copyDst']
 })
 

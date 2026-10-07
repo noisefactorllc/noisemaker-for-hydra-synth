@@ -163,6 +163,19 @@
         dsl: 'prev()'
       },
       {
+        // Self-reading feedback converging over 24 setup frames plus the final
+        // frame: each frame blends the gradient with the previous output.
+        // Legacy Hydra's output framebuffers are 8-bit, so every frame's write
+        // rounds; the port's Hydra surfaces must round the same way or the
+        // chain settles one step higher.
+        name: 'stateful_feedback_converge',
+        setupFrames: 24,
+        legacySetup: hydra => hydra.synth.gradient(0).blend(hydra.synth.src(hydra.o[0]), 0.5).out(hydra.o[0]),
+        dslSetup: 'gradient(speed: 0).blend(tex: src(tex: o0), amount: 0.5).write(o0)',
+        legacy: hydra => hydra.synth.gradient(0).blend(hydra.synth.src(hydra.o[0]), 0.5),
+        dsl: 'gradient(speed: 0).blend(tex: src(tex: o0), amount: 0.5)'
+      },
+      {
         name: 'parameter_matrix',
         time: 0.25,
         legacy: hydra => hydra.synth.noise(3, 2.5).posterize(5, 0.7).shift(0.1, 0.2, 0.3, 0.4),

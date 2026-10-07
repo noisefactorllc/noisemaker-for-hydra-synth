@@ -1754,7 +1754,7 @@ var surfaceBackupIndex = 0;
 var HYDRA_SURFACE_SPEC = Object.freeze({
   width: "screen",
   height: "screen",
-  format: "rgba32f",
+  format: "rgba8",
   usage: ["render", "sample", "copySrc", "copyDst"]
 });
 var LEADING_ARGUMENTS = {
