@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * GAP-002 installed developer workflow qualification.
+ * Installed developer workflow qualification.
  *
  * Packs the package, installs the tarball into an isolated consumer, and
  * exercises the installed API (ESM source entry and browser bundle) in
@@ -116,7 +116,12 @@ function runChromeDump(url) {
   }
 }
 
-test('installed package workflow: pack, install, exercise, reinstall, remove', async t => {
+// About ten minutes of network installs and browser cycles: a release
+// qualification, run by the weekly CI and on demand (HS_INSTALLED_WORKFLOW=1),
+// not by every npm test.
+test('installed package workflow: pack, install, exercise, reinstall, remove', {
+  skip: process.env.HS_INSTALLED_WORKFLOW !== '1' && 'set HS_INSTALLED_WORKFLOW=1 to run (the weekly CI does)'
+}, async t => {
   const scratchRoot = process.env.HOST_SCRATCH || tmpdir()
   mkdirSync(scratchRoot, { recursive: true })
   const scratch = mkdtempSync(join(scratchRoot, 'gap002-'))

@@ -1763,7 +1763,7 @@ test('compileWithHydraParity propagates structured parser subchain argument vali
   )
 })
 
-test('compileWithHydraParity propagates effect definition validation errors attached to Error (GAP-003)', async () => {
+test('compileWithHydraParity propagates effect definition validation errors attached to Error', async () => {
   class CanvasRenderer {
     async compile() {
       return {}
@@ -1800,7 +1800,7 @@ test('compileWithHydraParity propagates effect definition validation errors atta
   )
 })
 
-test('compileWithHydraParity propagates texture policy validation errors attached to Error (GAP-004)', async () => {
+test('compileWithHydraParity propagates texture policy validation errors attached to Error', async () => {
   class CanvasRenderer {
     async compile() {
       return {}
@@ -1839,7 +1839,7 @@ test('compileWithHydraParity propagates texture policy validation errors attache
   )
 })
 
-test('compileWithHydraParity propagates pass property validation errors attached to Error (GAP-005)', async () => {
+test('compileWithHydraParity propagates pass property validation errors attached to Error', async () => {
   class CanvasRenderer {
     async compile() {
       return {}
@@ -1878,7 +1878,7 @@ test('compileWithHydraParity propagates pass property validation errors attached
   )
 })
 
-test('compileWithHydraParity preserves texture policy and pass property contracts across recompilation (GAP-004, GAP-005)', async () => {
+test('compileWithHydraParity preserves texture policy and pass property contracts across recompilation', async () => {
   const textures = new Map()
 
   class MockPipeline {

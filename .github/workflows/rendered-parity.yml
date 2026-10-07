@@ -1,15 +1,39 @@
 name: Rendered parity
 
+# Push runs only the fast unit suite. The rendered gates (hosted runners render
+# in software), the installed-workflow qualifications and the Safari attempt
+# run weekly and on demand.
 on:
   push:
     branches: [main]
   workflow_dispatch:
+  schedule:
+    - cron: '53 7 * * 1'
 
 permissions:
   contents: read
 
+env:
+  HS_INSTALLED_WORKFLOW: '1'
+
 jobs:
+  unit:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      HS_INSTALLED_WORKFLOW: '0'
+    steps:
+      - uses: actions/checkout@93cb6efe18208431cddfb8368fd83d5badbf9bfd # v5.0.1
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --bin-links=false
+      - run: node --test test/*.test.mjs
+
   parity:
+    if: github.event_name != 'push'
     strategy:
       fail-fast: false
       matrix:
@@ -103,10 +127,11 @@ jobs:
           path: ${{ runner.temp }}/parity-receipts/
           if-no-files-found: error
 
-  # GAP-002 automated continuation: the installed developer workflow on a
+  # the installed developer workflow on a
   # Windows hosted runner (the last unmeasured declared host reachable in
   # this harness).
   installed-workflow-windows:
+    if: github.event_name != 'push'
     runs-on: windows-2025
     timeout-minutes: 45
     env:
@@ -131,10 +156,11 @@ jobs:
           path: ${{ runner.temp }}/installed-workflow-receipts/
           if-no-files-found: error
 
-  # GAP-002 automated continuation: minimum-version probe - the installed
+  # minimum-version probe - the installed
   # workflow against an older Chromium than any measured host, probing the
   # practical floor of the declared requirement (WebGL2 + CDN access).
   installed-workflow-minimum-version:
+    if: github.event_name != 'push'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
@@ -168,11 +194,12 @@ jobs:
           path: ${{ runner.temp }}/installed-workflow-receipts/
           if-no-files-found: error
 
-  # GAP-002 automated continuation: a Safari attempt on a macOS hosted
+  # a Safari attempt on a macOS hosted
   # runner. safaridriver (WebDriver) drives the real Safari against the
   # checkout's rendered-parity sweep page; a green run is Safari evidence,
   # a concrete failure is the evidenced automation blocker.
   installed-workflow-safari:
+    if: github.event_name != 'push'
     runs-on: macos-15
     timeout-minutes: 45
     steps:

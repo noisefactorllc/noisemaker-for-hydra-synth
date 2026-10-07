@@ -101,8 +101,7 @@
         // compiles the same constant-literal form (angle: 30, speed: 0), so
         // both shaders inline 30.0 into the identical rotate body and the
         // host compiler folds cos/sin identically on both sides — the
-        // SwiftShader folding residual in workflow-evidence/gap-001/
-        // rotate-residual-attribution.json was an artifact of comparing
+        // SwiftShader folding residual was an artifact of comparing
         // legacy's inlined-constant path against the port's uniform path,
         // and disappears from a matched-constant pair. Animated-parameter
         // parity is covered separately and byte-exactly by
@@ -299,10 +298,9 @@
         // Current Hydra source reference: gradient = vec4(_st, sin(time*speed), 1.0)
         // with speed 0 → (x, y, 0, 1); sum(scale) = vec4(vec3(v.r+v.g+v.b+v.a), _c0.a).
         // With scale = 0.25 per channel: rgb = 0.25*(x + y + 1), alpha = 1.
-        // Disclosure: the formula and the fixed body are corroborated in-tree
-        // against the pinned Hydra authority commit 9d29a9f4 (see
-        // workflow-evidence/gap-001/current-hydra-sum-source.txt); the
-        // rendered comparison remains formula-bound, not legacy-pixel-bound.
+        // Disclosure: the formula and the fixed body are corroborated against
+        // the pinned Hydra authority commit 9d29a9f4; the rendered comparison
+        // remains formula-bound, not legacy-pixel-bound.
         name: 'sum_reference',
         reference: (x, y) => {
           const v = 0.25 * (x + y + 1)

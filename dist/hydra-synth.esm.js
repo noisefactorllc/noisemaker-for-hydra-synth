@@ -1689,7 +1689,7 @@ function registerHydraEffect(effect, engine) {
   if (!definition.shaders) definition.shaders = {};
   definition.shaders[effect.name] = {
     glsl: shader,
-    // WebGPU backend source (GAP-001): translated from the same GLSL. The
+    // WebGPU backend source: translated from the same GLSL. The
     // shared per-effect program is a fallback path — fused chain programs
     // carry their own exact-typed WGSL — so its uniform members are f32.
     wgsl: buildEffectWgsl({

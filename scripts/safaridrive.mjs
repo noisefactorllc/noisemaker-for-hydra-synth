@@ -1,8 +1,8 @@
 #!/usr/bin/env node
 /**
- * GAP-002 Safari attempt: drive the real Safari on this macOS host through
+ * Safari attempt: drive the real Safari on this macOS host through
  * safaridriver (WebDriver). Two legs, one run: the rendered-parity sweep
- * page served from the checkout, then the GAP-002 installed developer
+ * page served from the checkout, then the installed developer
  * workflow — npm pack, isolated install, both installed entry points, 12
  * create/render/dispose cycles, reinstall, removal, and tracked-file
  * preservation — all driven through the same safaridriver session family.
@@ -84,7 +84,7 @@ async function driverPollSummary(sessionId, timeoutMs, what) {
   }, timeoutMs, what)
 }
 
-// GAP-002: the installed developer workflow in the same real Safari. Packs
+// The installed developer workflow in the same real Safari. Packs
 // the candidate, installs it into an isolated consumer under the OS temp
 // dir (an explicit package root, so npm never walks up into the checkout),
 // serves the consumer, and drives the installed ESM and bundle entry-point
@@ -280,7 +280,7 @@ try {
     server.kill('SIGTERM')
   }
 
-  // Same real Safari, same run: the GAP-002 installed developer workflow.
+  // Same real Safari, same run: the installed developer workflow.
   const installedPass = await safariRunInstalledWorkflow()
   if (!installedPass) process.exitCode = 1
 } catch (err) {

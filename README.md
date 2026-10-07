@@ -5,10 +5,6 @@
 
 # Noisemaker for Hydra Synth
 
-Current measured support: [compatibility report](docs/COMPATIBILITY.md).
-
-Current qualification limits: [completion gaps](docs/COMPLETION_GAPS.md).
-
 Noisemaker for Hydra Synth is an experimental demo port of Hydra's GLSL effects to the [Noisemaker](https://noisemaker.app/) rendering engine. These effects can be mixed with Noisemaker effects in the same program chains.
 
 This is intended only as a tech demo that shows how to integrate the Noisemaker renderer into other projects.
@@ -62,9 +58,9 @@ The historical `hydra-synth.js` artifact name is retained for the editor's inter
 
 ## Requirements and dependency contract
 
-- **Runtime dependency:** the package has no production npm dependencies. Its one runtime dependency is the Noisemaker engine bundle, which `loadHydraEffects()` loads from the engine CDN `https://shaders.noisedeck.app/1` at runtime. The `/1` base path is rolling: served engine bytes move with upstream releases, so offline use is not supported and a host that needs an immutable engine can pin a copy by passing `{ cdn: <basePath> }` (or a preloaded engine via `{ engine }`). A served-byte identity receipt (SHA-256 and Last-Modified, correlated to the upstream release tag) is recorded in `docs/COMPATIBILITY.md` and `workflow-evidence/gap-003/`.
+- **Runtime dependency:** the package has no production npm dependencies. Its one runtime dependency is the Noisemaker engine bundle, which `loadHydraEffects()` loads from the engine CDN `https://shaders.noisedeck.app/1` at runtime. The `/1` base path is rolling: served engine bytes move with upstream releases, so offline use is not supported and a host that needs an immutable engine can pin a copy by passing `{ cdn: <basePath> }` (or a preloaded engine via `{ engine }`).
 - **Browser runtime:** any browser with a WebGL2 implementation and network access to the engine CDN, per [Supported hosts](#supported-hosts-and-ownership). WebGPU is not supported.
-- **Development tooling:** `npm run build` and `npm test` require Node >= 18 (the `esbuild` engine floor; `http-server` needs >= 12). The suites were exercised on Node 26.5.1; no browser-runtime Node requirement exists.
+- **Development tooling:** `npm run build` and `npm test` need Node 22 or newer, the Node.js lines supported today (22, 24 and 26); `esbuild` itself accepts Node 18 and later. CI runs on Node 24, and the suites pass on 22 and 26. The browser runtime has no Node requirement.
 - **License:** AGPL-3.0-only, matching the verbatim AGPLv3 `LICENSE` text.
 
 ## Develop and verify
@@ -75,7 +71,7 @@ npm run build
 npm test
 ```
 
-The test command runs Node contract tests and exact browser pixel comparisons against upstream Hydra, including native-to-Hydra and Hydra-to-native surface transitions.
+The test command runs Node contract tests and exact browser pixel comparisons against upstream Hydra, including native-to-Hydra and Hydra-to-native surface transitions. The installed-package qualification (about ten minutes of installs and browser cycles) runs only with `HS_INSTALLED_WORKFLOW=1`. On every push CI runs the Node tests; the rendered gates and installed-package qualifications run weekly and on demand.
 
 ## Upstream
 

@@ -71,7 +71,7 @@ test('evaluateSweep: a sweep with no summary line fails closed', () => {
   assert.ok(result.reasons.some(r => r.includes('no summary line')))
 })
 
-// GAP-005 reopen (2026-09-30) pins: with the derived expected id set, the
+// Pins: with the derived expected id set, the
 // gate must fail duplicates, missing ids, and unexpected ids regardless of
 // the counts, and THROW lines must surface as unexpected ids.
 

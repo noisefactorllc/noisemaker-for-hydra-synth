@@ -13,7 +13,7 @@ import {
   wgslTypeForUniformValue
 } from '../src/engine/wgslTranslate.js'
 
-// GAP-001 WebGPU backend: the port's generated GLSL must translate to WGSL
+// WebGPU backend: the port's generated GLSL must translate to WGSL
 // that satisfies the engine's WebGPU program conventions (explicit
 // @group/@binding declarations matching the pass-input pairs plus one uniform
 // buffer; a Params struct whose members are packed by name; detected

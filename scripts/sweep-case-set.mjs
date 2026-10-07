@@ -1,6 +1,6 @@
 // Expected sweep case-id derivation for the rendered parity entrypoints.
 //
-// GAP-005 (reopened 2026-09-30): the parity-summary line counting could
+// The parity-summary line counting could
 // accept a sweep DOM that duplicates one passing case and omits another —
 // such a DOM still reported expected=executed=exact with missing=0. The
 // fix required by the reopen: derive the EXPECTED id set from the same

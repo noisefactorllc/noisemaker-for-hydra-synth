@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { TOTAL_CASES } from '../scripts/ci-gate.mjs'
 import { classifyCaseIds, deriveSweepCaseIds, generatedCaseNames, pageCaseNames } from '../scripts/sweep-case-set.mjs'
 
-// GAP-005 reopen (2026-09-30) regression pins: the expected sweep case-id
+// Regression pins: the expected sweep case-id
 // set must be derived from the same catalog modules and page bytes the sweep
 // renders, cross-checked against TOTAL_CASES, with duplicates, missing ids,
 // and unexpected ids failing regardless of the counts.

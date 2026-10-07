@@ -128,7 +128,7 @@ try {
   if (requestedIds.length > 0 && /[^a-zA-Z0-9_]/.test(requestedIds.join(''))) {
     throw new Error('case ids must match [a-zA-Z0-9_]')
   }
-  // Expected case-id derivation (GAP-005 reopen 2026-09-30): the expected id
+  // Expected case-id derivation: the expected id
   // set comes from the same catalog modules and page bytes the sweep renders,
   // cross-checked against TOTAL_CASES, and every sweep's per-case ids are
   // checked for duplicates, missing ids, and unexpected ids REGARDLESS of
@@ -179,7 +179,7 @@ try {
     const summary = parseSummary(dom)
     if (summary.ok === null) throw new Error('no summary line — the sweep did not report results')
     authorityTotals.push(summary.total)
-    // Id-set accounting independent of the counts (GAP-005 reopen): the
+    // Id-set accounting independent of the counts: the
     // reported ids in emission order (duplicates preserved) must be exactly
     // the expected set — no duplicates, no unexpected ids, no missing ids.
     const reportedIds = [...summary.okLines, ...summary.failures.map(f => f.split(/\s+/)[0])]

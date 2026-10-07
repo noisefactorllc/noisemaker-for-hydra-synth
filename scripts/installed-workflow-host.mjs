@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /*
- * GAP-002 installed developer workflow qualification — additional declared
+ * Installed developer workflow qualification — additional declared
  * hosts.
  *
  * Packs the package, installs the tarball into an isolated consumer, and
@@ -12,7 +12,7 @@
  *
  * Usage:
  *   node scripts/installed-workflow-host.mjs --browser firefox \
- *     --cycles 12 --output workflow-evidence/gap-002/installed-workflow-firefox.json
+ *     --cycles 12 --output installed-workflow-out/installed-workflow-firefox.json
  *
  * Requires: a Playwright module (PLAYWRIGHT_MODULE, or PLAYWRIGHT_PATH as a
  * node_modules directory to createRequire from), PLAYWRIGHT_BROWSERS_PATH,
@@ -26,7 +26,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { createRequire } from 'node:module'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { BUNDLE_PAGE_BODY, MODULE_PAGE_BODY, encodeTestPng, pageHtml, parseSummary } from '../test/installed-workflow-page.mjs'
 
@@ -43,7 +43,7 @@ const CYCLES = Number(flag('cycles')) || 12
 // the measured install is an upgrade-over rather than a fresh install.
 const UPGRADE_FROM = flag('upgrade-from')
 const EXTRA_ARGS = (flag('browser-args') || process.env.BROWSER_ARGS || '').split(',').map(s => s.trim()).filter(Boolean)
-const OUTPUT = flag('output') || `workflow-evidence/gap-002/installed-workflow-${BROWSER}-${CYCLES}cycles.json`
+const OUTPUT = flag('output') || `installed-workflow-out/installed-workflow-${BROWSER}-${CYCLES}cycles.json`
 const REPO = process.cwd()
 
 const playwrightPath = process.env.PLAYWRIGHT_MODULE || process.env.PLAYWRIGHT_PATH
@@ -328,6 +328,7 @@ try {
   }
   evidence.all_pass = evidence.runs.every(r => r.pass) && evidence.reinstall.pass && evidence.removal.pass && unchanged
     && (!evidence.upgrade || (evidence.upgrade.over_install.pass && evidence.upgrade.prior_installed && evidence.upgrade.discriminator.matches_candidate))
+  mkdirSync(dirname(join(REPO, OUTPUT)), { recursive: true })
   writeFileSync(join(REPO, OUTPUT), JSON.stringify(evidence, null, 2) + '\n')
   console.log(JSON.stringify({ output: OUTPUT, all_pass: evidence.all_pass, browser: BROWSER, version: evidence.browser_version, runs: evidence.runs.map(r => ({ page: r.page, ok: r.ok, fail: r.fail, renderer: r.renderer })) }, null, 2))
   if (!evidence.all_pass) process.exit(1)

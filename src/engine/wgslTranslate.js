@@ -1,6 +1,6 @@
 // GLSL ES 3.0 -> WGSL translation for the port's generated Hydra shaders.
 //
-// GAP-001 backend qualification: the port registers GLSL bodies only, so the
+// Backend qualification: the port registers GLSL bodies only, so the
 // engine's WebGPU backend fails every Hydra program with ERR_NO_WGSL_SOURCE
 // (its resolveWGSLSource finds no `wgsl` key). This module translates the
 // machine-generated GLSL of the port (per-effect programs from
@@ -34,7 +34,7 @@
 //     the same logical _st from `resolution.y - in.position.y` and retain
 //     the explicit `1.0 - y` when sampling internal textures.
 // Parity expectation: f32 math on identical operation order; no tolerance is
-// introduced here — measured deltas are recorded by the GAP-001 probes.
+// introduced here — measured deltas are recorded by the WebGPU probes.
 
 const GLSL_TYPE_TO_WGSL = {
   float: 'f32',

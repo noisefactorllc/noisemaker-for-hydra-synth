@@ -311,7 +311,7 @@ export function buildHydraShaderOverrides(compiled, promotedSurfaces = null) {
       const final = nodes.find(({ step }) => step.temp === finalTemp)
       const fused = buildShader(nodes, finalTemp)
       const override = { glsl: fused.glsl }
-      // WebGPU source (GAP-001): translate the fused program. The program's
+      // WebGPU source: translate the fused program. The program's
       // texture bindings mirror the target effect definition's pass inputs;
       // the only dynamic uniforms are the injected oscillator uniforms.
       try {

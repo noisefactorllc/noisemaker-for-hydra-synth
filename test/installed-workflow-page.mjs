@@ -1,5 +1,5 @@
 /**
- * Shared fixtures for the GAP-002 installed developer workflow checks.
+ * Shared fixtures for the installed developer workflow checks.
  *
  * The pages exercise the installed package through both entry points:
  * meaningful pixels, parameter change, external image input, structured

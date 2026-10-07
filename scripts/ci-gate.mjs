@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /*
  * Rendered CI gate (browser sweep): runs the exact browser pixel-parity
- * sweep and enforces the GAP-005 acceptance semantics for the rendered
+ * sweep and enforces the acceptance semantics for the rendered
  * portion of the gate:
  *
  *  - Every expected case executes: ok + fail must equal the full
@@ -11,8 +11,7 @@
  *    strict only. The sweep must be fully exact (0 failures). There is
  *    deliberately NO residual-tolerance opt-in: tolerating the documented
  *    Linux animated-parameter residual (rotate_animated_parameter,
- *    96/16384 bytes, max channel delta 1, per docs/COMPLETION_GAPS.md
- *    GAP-001 sweep status) would be an unratified policy weakening of the
+ *    96/16384 bytes, max channel delta 1) would be an unratified policy weakening of the
  *    criterion. A host that cannot produce an exact sweep fails the gate
  *    by design, until the residual is fixed or the policy change is
  *    explicitly ratified by the actor with workflow authority. The
@@ -73,8 +72,8 @@ let addedUpstream = false
 // produce an exact sweep fails the gate, by design, until the residual is
 // fixed or the policy change is explicitly ratified by the actor with
 // workflow authority (the qualified macOS host record for the legacy
-// 58-case suite is 58/58 exact). The GAP-001 complete expected-case
-// inventory remains open and is not claimed by this runner.
+// 58-case suite is 58/58 exact). A complete expected-case inventory is
+// not claimed by this runner.
 // The page emits 78 cases per size sweep (the page runs once at 64x64 and
 // once at 96x48 via ?w=96&h=48): `sum` was never a generated legacy case (the
 // authority bundle's sum shader cannot compile) and stays excluded there;
@@ -218,7 +217,7 @@ async function runChromeDump(url, port) {
 // path's logic exactly as the live gate does. When expectedIds is provided
 // (the derived expected case-id set from scripts/sweep-case-set.mjs), the
 // per-case ids are additionally checked for duplicates, unexpected ids, and
-// missing ids REGARDLESS of the counts (GAP-005 reopen 2026-09-30: a DOM
+// missing ids REGARDLESS of the counts (a DOM
 // that duplicates one case and omits another keeps every count consistent,
 // so only the id-set comparison catches it). Failures are reported once
 // (inside the mismatch reason), not duplicated.
@@ -354,7 +353,7 @@ try {
   console.log(`[ci-gate] http-server verified serving on port ${servingPort} (page bytes match the checkout)`)
 
   // Derive the expected case-id set from the same catalog modules and page
-  // bytes the sweep renders (GAP-005 reopen 2026-09-30) and cross-check it
+  // bytes the sweep renders and cross-check it
   // against the TOTAL_CASES denominator before any sweep runs: a catalog or
   // page drift must fail loudly, not silently move the denominator.
   const expectedCaseIds = deriveSweepCaseIds()

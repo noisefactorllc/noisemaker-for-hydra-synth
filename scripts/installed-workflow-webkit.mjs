@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * GAP-002 installed developer workflow qualification — Safari engine leg
+ * Installed developer workflow qualification — Safari engine leg
  * (Playwright-driven WebKit, the engine Safari 26 uses, with hardware
  * Metal-backed WebGL2 on the macOS Apple silicon host).
  *
@@ -28,7 +28,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { createRequire } from 'node:module'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
-import { join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
 import process from 'node:process'
 import { BUNDLE_PAGE_BODY, MODULE_PAGE_BODY, encodeTestPng, pageHtml, parseSummary } from '../test/installed-workflow-page.mjs'
 
@@ -38,7 +38,7 @@ const flag = name => {
   return i >= 0 ? args[i + 1] : undefined
 }
 const CYCLES = Number(flag('cycles')) || 12
-const OUTPUT = flag('output') || `workflow-evidence/gap-002/installed-workflow-webkit-${CYCLES}cycles.json`
+const OUTPUT = flag('output') || `installed-workflow-out/installed-workflow-webkit-${CYCLES}cycles.json`
 const REPO = process.cwd()
 
 function freePort() {
@@ -258,6 +258,7 @@ try {
     pass: unchanged
   }
   evidence.all_pass = evidence.runs.every(r => r.pass) && evidence.reinstall.pass && evidence.removal.pass && unchanged
+  mkdirSync(dirname(resolve(REPO, OUTPUT)), { recursive: true })
   writeFileSync(resolve(REPO, OUTPUT), JSON.stringify(evidence, null, 2) + '\n')
   console.log(JSON.stringify({ output: OUTPUT, all_pass: evidence.all_pass, browser_version: evidence.browser_version, runs: evidence.runs.map(r => ({ page: r.page, ok: r.ok, fail: r.fail, renderer: r.renderer })) }, null, 2))
   if (!evidence.all_pass) process.exit(1)

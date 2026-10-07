@@ -43,8 +43,7 @@ console.log(`[test] using Chrome binary: ${CHROME}`)
 // A sandboxed host may only serve on an allow-listed loopback range; the
 // first bindable entry of HOST_PORTS wins; the ephemeral port (0) is the
 // final fallback. Same policy as scripts/ci-gate.mjs. An explicit PORT env
-// still pins the server port (the documented invocation in COMPATIBILITY.md
-// and the gap receipts).
+// still pins the server port.
 const PORT = process.env.PORT ? Number(process.env.PORT) : await pickFreePort()
 const SWEEPS = [
   { url: '/dev-noisemaker/pixel-parity.html', name: 'pixel-parity-64x64', expectPass: 78 },

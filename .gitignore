@@ -75,3 +75,6 @@ dev-noisemaker/.legacy-hydra-synth.js
 
 # Chrome profile scratch from test runs
 .host-scratch/
+
+# installed-workflow qualification output
+installed-workflow-out/

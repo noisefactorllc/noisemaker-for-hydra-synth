@@ -11,7 +11,7 @@
  * Renderer qualification: on a folding host (SwiftShader), legacy Hydra's own
  * compile-time-folded constant-argument render and its runtime-uniform
  * function-argument render of the SAME value differ by a documented 1-byte
- * trig artifact (workflow-evidence/gap-001/rotate-residual-attribution.json);
+ * trig artifact;
  * the two required rotate sweep cases are mutually exclusive byte patterns on
  * such a host, so the comparison is evaluated on the qualified exact-parity
  * renderer (the job's GPU host, reached through the host broker) instead. The
