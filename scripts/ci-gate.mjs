@@ -163,8 +163,10 @@ async function runChromeDump(url, port) {
   // is env-tunable (GATE_DUMP_TIMEOUT ms).
   const dumpTimeout = Number(process.env.GATE_DUMP_TIMEOUT || 2400000)
   // Kill lingering headless chrome from the unit suite first: a leftover
-  // renderer can hold macOS launch services and hang the next launch.
-  if (process.platform === 'darwin') {
+  // renderer can hold macOS launch services and hang the next launch. Only on
+  // GitHub-hosted runners, which are single-use: on a shared host, matching
+  // headless browsers by name would kill other sessions' browsers too.
+  if (process.platform === 'darwin' && process.env.RUNNER_ENVIRONMENT === 'github-hosted') {
     try { spawnSync('pkill', ['-f', '(Google Chrome|Chromium|headless_shell).*--headless'], { timeout: 15000 }) } catch (_e) {}
   }
   const childArgs = [join(process.cwd(), 'scripts', 'chrome-dump.mjs'), CHROME, `http://localhost:${port}${url}`, String(dumpTimeout), out]
