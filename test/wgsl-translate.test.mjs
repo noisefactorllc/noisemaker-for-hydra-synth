@@ -102,17 +102,23 @@ test('every executable Hydra effect translates to a structurally valid WGSL prog
   }
 })
 
-test('src/prev bodies convert the bottom-origin flip to its top-origin form', () => {
-  // hydraGlslBody injects fract(vec2(x, 1.0 - y)) for GLSL's bottom-origin
-  // texture() addressing; textureSample() is top-origin, so the equivalent
-  // is fract(vec2(x, y)) (1 - fract(1 - y) === fract(y) componentwise).
+test('src/prev bodies retain the engine texture orientation', () => {
+  // The engine presents WebGPU textures with a vertical flip. Hydra's
+  // logical top-origin coordinate therefore still needs 1.0 - y when
+  // sampling the internal texture, as it does on the GLSL path.
   const src = glslFunctions().find(e => e.name === 'src')
   const wgsl = buildProgram(src)
-  assert.match(wgsl, /textureSample\(tex, tex_sampler, fract\(vec2f\(_st\.x, _st\.y\)\)\)/)
-  assert.doesNotMatch(wgsl, /1\.0 - _st\.y/)
+  assert.match(wgsl, /textureSample\(tex, tex_sampler, fract\(vec2f\(_st\.x, 1\.0 - _st\.y\)\)\)/)
   const prev = glslFunctions().find(e => e.name === 'prev')
   const prevWgsl = buildProgram(prev)
-  assert.match(prevWgsl, /textureSample\(prevBuffer, prevBuffer_sampler, fract\(vec2f\(_st\.x, _st\.y\)\)\)/)
+  assert.match(prevWgsl, /textureSample\(prevBuffer, prevBuffer_sampler, fract\(vec2f\(_st\.x, 1\.0 - _st\.y\)\)\)/)
+})
+
+test('per-effect mains match Hydra canvas and texture coordinates', () => {
+  const luma = glslFunctions().find(e => e.name === 'luma')
+  const wgsl = buildProgram(luma)
+  assert.match(wgsl, /let _st = vec2f\(in\.position\.x, params\.resolution\.y - in\.position\.y\) \/ params\.resolution;/)
+  assert.match(wgsl, /textureSample\(inputTex, inputTex_sampler, vec2f\(_st\.x, 1\.0 - _st\.y\)\)/)
 })
 
 test('atan translates by arity: two-arg becomes atan2, one-arg stays atan', () => {
@@ -187,6 +193,18 @@ test('per-effect programs carry the translated GLSL utility helpers', () => {
   assert.match(lumaWgsl, /const W: vec3f = vec3f\(/)
 })
 
+test('noise utility splats the scalar max argument for WGSL vector overloads', () => {
+  const noise = glslFunctions().find(e => e.name === 'noise')
+  const wgsl = buildProgram(noise)
+  assert.match(wgsl, /var m: vec4f = max\(0\.6 - vec4f\([^\n]+\), vec4f\(0\.0\)\);/)
+})
+
+test('color utility splats scalar clamp bounds for WGSL vector overloads', () => {
+  const luma = glslFunctions().find(e => e.name === 'luma')
+  const wgsl = buildProgram(luma)
+  assert.match(wgsl, /clamp\(p - K\.xxx, vec3f\(0\.0\), vec3f\(1\.0\)\)/)
+})
+
 test('fused override texture bindings mirror the definition pass inputs', async () => {
   const { hydraPassTextureInputs } = await import('../src/engine/portHydraEffects.js')
   const glslList = glslFunctions()
@@ -246,10 +264,9 @@ void main() {
   assert.match(wgsl, /params\._hydra_t0_speed/)
   const fsMain = wgsl.slice(wgsl.indexOf('fn fs_main'))
   assert.doesNotMatch(fsMain, /(?<!params\.)\b_hydra_t0_speed\b/)
-  // Top-origin st: the GLSL bottom-origin flip term is dropped, not
-  // substituted — in.position is already top-origin.
-  assert.match(wgsl, /var _st: vec2f = vec2f\(in\.position\.x, in\.position\.y\) \/ params\.resolution\.xy;/)
-  assert.doesNotMatch(wgsl, /params\.resolution\.y\s*-\s*in\.position\.y/)
+  // The engine flips internal WebGPU textures during presentation, so the
+  // GLSL logical-coordinate flip must survive translation.
+  assert.match(wgsl, /var _st: vec2f = vec2f\(in\.position\.x, params\.resolution\.y - in\.position\.y\) \/ params\.resolution\.xy;/)
   assert.match(wgsl, /resolution: vec2f,/)
   assert.match(wgsl, /time: f32,/)
   assert.match(wgsl, /@fragment\s*\nfn fs_main\(/)

@@ -28,14 +28,11 @@
 //     generated WGSL never is; whether integer-valued uniforms survive the
 //     name-based path byte-exactly is not pinned by anything in-repo and is
 //     part of the pending pixel qualification.
-//   - Coordinate conventions: GLSL _st is top-origin (the generated mains
-//     compute `resolution.y - gl_FragCoord.y`), which equals the WebGPU
-//     framebuffer coordinate — so the fused mains' flip term is DROPPED
-//     (in.position is already top-origin), and textureSample() addressing is
-//     top-origin while GLSL texture() is bottom-origin, so the mains'
-//     explicit `1.0 - y` flips are dropped and st coordinates are used
-//     directly; hydraGlslBody's injected bottom-origin flip in src/prev is
-//     rewritten to its top-origin equivalent rather than kept verbatim.
+//   - Coordinate conventions: GLSL _st is logical top-origin (the generated
+//     mains compute `resolution.y - gl_FragCoord.y`). Noisemaker presents
+//     WebGPU internal textures with a vertical flip, so WGSL must compute
+//     the same logical _st from `resolution.y - in.position.y` and retain
+//     the explicit `1.0 - y` when sampling internal textures.
 // Parity expectation: f32 math on identical operation order; no tolerance is
 // introduced here — measured deltas are recorded by the GAP-001 probes.
 
@@ -138,18 +135,8 @@ export function translateGlslStatements(glsl, { samplers = {}, uniformNames = []
   text = text.replace(/^\s*out\s+vec4\s+\w+\s*;$/gm, '')
   // texture2D(tex, coord) and hydraGlslBody-converted texture(tex, coord)
   // both become textureSample(tex, tex_sampler, coord). Texture coordinates
-  // here are already top-origin st values (see module comment), so no flip
-  // is added: hydraGlslBody's injected bottom-origin flip
-  // fract(vec2(x, 1.0 - y)) is rewritten to its top-origin equivalent
-  // fract(vec2(x, y)) (1 - fract(1 - y) === fract(y) componentwise), which
-  // keeps feedback wrap-around while sampling the same texel.
-  text = text.replace(
-    /\btexture(?:2D)?\s*\(\s*(\w+)\s*,\s*fract\s*\(\s*vec2\s*\(\s*([^,()]+?)\s*,\s*1\.0\s*-\s*([^()]+?)\s*\)\s*\)\s*/g,
-    (m, tex, x, y) => {
-      const sampler = samplers[tex]
-      if (!sampler) throw new Error(`texture('${tex}') has no known WGSL sampler binding`)
-      return `textureSample(${tex}, ${sampler}, fract(vec2(${x}, ${y})))`
-    })
+  // here retain their explicit y flip to sample the engine's WebGPU
+  // internal texture orientation (see module comment).
   text = text.replace(/\btexture(?:2D)?\s*\(\s*(\w+)\s*,/g, (m, tex) => {
     const sampler = samplers[tex]
     if (!sampler) throw new Error(`texture('${tex}') has no known WGSL sampler binding`)
@@ -192,6 +179,39 @@ export function translateGlslStatements(glsl, { samplers = {}, uniformNames = []
   text = text.replace(/\bmat([234])\s*\(/g, (_, n) => `mat${n}x${n}f(`)
   text = text.replace(/\bfloat\s*\(/g, 'f32(')
   text = text.replace(/\bint\s*\(/g, 'i32(')
+  // GLSL broadcasts scalar bounds in min/max/clamp calls; WGSL requires
+  // all arguments to have the same vector type. The shared utility helpers
+  // use max(0.6 - vec4(...), 0.0) and clamp(p - K.xxx, 0.0, 1.0).
+  {
+    let out = ''
+    let i = 0
+    for (;;) {
+      const m = /\b(?:min|max|clamp)\s*\(/.exec(text.slice(i))
+      if (!m) { out += text.slice(i); break }
+      const start = i + m.index
+      out += text.slice(i, start)
+      const open = start + m[0].length - 1
+      let depth = 0
+      let end = -1
+      for (let j = open; j < text.length; j++) {
+        if (text[j] === '(') depth++
+        else if (text[j] === ')') { depth--; if (depth === 0) { end = j; break } }
+      }
+      if (end === -1) throw new Error('unbalanced min/max/clamp( in GLSL source')
+      const args = splitTopLevel(text.slice(open + 1, end))
+      const scalar = /^[+-]?(?:\d+\.?\d*|\.\d+)$/
+      const arity = args.map(arg => arg.match(/\bvec([234])f\s*\(/)?.[1] || arg.match(/\.([xyzwrgba]{2,4})\b/)?.[1].length)
+        .find(Boolean)
+      if (arity && (args.length === 2 || args.length === 3)) {
+        for (let n = 0; n < args.length; n++) {
+          if (scalar.test(args[n])) args[n] = `vec${arity}f(${args[n]})`
+        }
+      }
+      out += `${m[0]}${args.join(', ')})`
+      i = end + 1
+    }
+    text = out
+  }
   // GLSL writes results through the fixed out variable; WGSL fragment entry
   // points return the color.
   text = text.replace(/\bfragColor\s*=/g, 'return ')
@@ -307,17 +327,13 @@ export function translateFusedProgram(fusedGlsl, { textureInputs, uniformNames }
   let text = translateGlslStatements(fusedGlsl, { samplers, uniformNames })
   // The fused GLSL's `void main()` becomes the fragment entry point, reading
   // framebuffer coordinates from the vertex stage's position builtin (the
-  // generated GLSL computes top-origin st as
-  // (x, resolution.y - gl_FragCoord.y) / resolution, which equals
-  // in.position.xy / resolution in WebGPU framebuffer coordinates — so the
-  // GLSL y-flip term is dropped, not substituted).
+  // generated GLSL computes logical top-origin st as
+  // (x, resolution.y - gl_FragCoord.y) / resolution. The engine flips its
+  // WebGPU texture during presentation, so WGSL retains the y-flip term.
   text = text.replace(/\bfn main\(\)/, '@fragment\nfn fs_main(in: VertexOutput) -> @location(0) vec4f')
   text = text.replace(/\bfn main\(/, '@fragment\nfn fs_main(in: VertexOutput) -> @location(0) vec4f')
   text = text.replace(/gl_FragCoord\.x/g, 'in.position.x')
   text = text.replace(/gl_FragCoord\.y/g, 'in.position.y')
-  // Drop the GLSL bottom-origin flip: in.position is already top-origin, so
-  // (x, resolution.y - y_glsl) is exactly (x, y_webgpu).
-  text = text.replace(/params\.resolution\.y\s*-\s*in\.position\.y/g, 'in.position.y')
   // Self-check: every dynamic uniform reference must have been rewritten to
   // a Params member. A bare `_hydra_*` uniform identifier would be an
   // undeclared identifier in WGSL (the engine compiles per program, so a
@@ -358,21 +374,21 @@ export function buildEffectWgsl({ name, type, glsl: body, wrapperInputs, passInp
   const extraParams = wrapperInputs.map(i => `${i.name}: ${glslTypeToWgsl(i.type)}`)
   const wrapper = `fn ${fnName}(${[...params, ...extraParams].join(', ')}) -> ${ret} {\n${translated}\n}`
 
-  // Fragment main, mirroring each GLSL template exactly (coordinate flips
-  // resolved for WGSL's top-origin texture addressing — see module comment).
+  // Fragment main, mirroring each GLSL template and the engine's internal
+  // texture orientation (see module comment).
   const sample = (tex, coord) => `textureSample(${tex}, ${samplers[tex]}, ${coord})`
   let main
-  const st = 'let _st = in.position.xy / params.resolution;'
+  const st = 'let _st = vec2f(in.position.x, params.resolution.y - in.position.y) / params.resolution;'
   if (type === 'src') {
     main = `${st}\n  return ${fnName}(_st${wrapperInputs.map(i => `, params.${i.name}`).join('')});`
   } else if (type === 'coord') {
-    main = `${st}\n  let newUV = ${fnName}(_st${wrapperInputs.map(i => `, params.${i.name}`).join('')});\n  return ${sample('inputTex', 'vec2f(newUV.x, newUV.y)')};`
+    main = `${st}\n  let newUV = ${fnName}(_st${wrapperInputs.map(i => `, params.${i.name}`).join('')});\n  return ${sample('inputTex', 'vec2f(newUV.x, 1.0 - newUV.y)')};`
   } else if (type === 'color') {
-    main = `${st}\n  let _c0 = ${sample('inputTex', '_st')};\n  return ${fnName}(_c0${wrapperInputs.map(i => `, params.${i.name}`).join('')});`
+    main = `${st}\n  let _c0 = ${sample('inputTex', 'vec2f(_st.x, 1.0 - _st.y)')};\n  return ${fnName}(_c0${wrapperInputs.map(i => `, params.${i.name}`).join('')});`
   } else if (type === 'combine') {
-    main = `${st}\n  let _c0 = ${sample('inputTex', '_st')};\n  let _c1 = ${sample('tex', '_st')};\n  return ${fnName}(_c0, _c1${wrapperInputs.map(i => `, params.${i.name}`).join('')});`
+    main = `${st}\n  let _c0 = ${sample('inputTex', 'vec2f(_st.x, 1.0 - _st.y)')};\n  let _c1 = ${sample('tex', 'vec2f(_st.x, 1.0 - _st.y)')};\n  return ${fnName}(_c0, _c1${wrapperInputs.map(i => `, params.${i.name}`).join('')});`
   } else if (type === 'combineCoord') {
-    main = `${st}\n  let _c0 = ${sample('tex', '_st')};\n  let newUV = ${fnName}(_st, _c0${wrapperInputs.map(i => `, params.${i.name}`).join('')});\n  return ${sample('inputTex', 'vec2f(newUV.x, newUV.y)')};`
+    main = `${st}\n  let _c0 = ${sample('tex', 'vec2f(_st.x, 1.0 - _st.y)')};\n  let newUV = ${fnName}(_st, _c0${wrapperInputs.map(i => `, params.${i.name}`).join('')});\n  return ${sample('inputTex', 'vec2f(newUV.x, 1.0 - newUV.y)')};`
   } else {
     throw new Error(`Unknown Hydra effect type '${type}'`)
   }

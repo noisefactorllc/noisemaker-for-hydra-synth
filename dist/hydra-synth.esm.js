@@ -1207,14 +1207,6 @@ function translateGlslStatements(glsl, { samplers = {}, uniformNames = [] } = {}
   text = text.replace(/^\s*precision\s+.*$/gm, "");
   text = text.replace(/^\s*uniform\s+.*$/gm, "");
   text = text.replace(/^\s*out\s+vec4\s+\w+\s*;$/gm, "");
-  text = text.replace(
-    /\btexture(?:2D)?\s*\(\s*(\w+)\s*,\s*fract\s*\(\s*vec2\s*\(\s*([^,()]+?)\s*,\s*1\.0\s*-\s*([^()]+?)\s*\)\s*\)\s*/g,
-    (m, tex, x, y) => {
-      const sampler = samplers[tex];
-      if (!sampler) throw new Error(`texture('${tex}') has no known WGSL sampler binding`);
-      return `textureSample(${tex}, ${sampler}, fract(vec2(${x}, ${y})))`;
-    }
-  );
   text = text.replace(/\btexture(?:2D)?\s*\(\s*(\w+)\s*,/g, (m, tex) => {
     const sampler = samplers[tex];
     if (!sampler) throw new Error(`texture('${tex}') has no known WGSL sampler binding`);
@@ -1263,6 +1255,44 @@ function translateGlslStatements(glsl, { samplers = {}, uniformNames = [] } = {}
   text = text.replace(/\bmat([234])\s*\(/g, (_, n) => `mat${n}x${n}f(`);
   text = text.replace(/\bfloat\s*\(/g, "f32(");
   text = text.replace(/\bint\s*\(/g, "i32(");
+  {
+    let out = "";
+    let i = 0;
+    for (; ; ) {
+      const m = /\b(?:min|max|clamp)\s*\(/.exec(text.slice(i));
+      if (!m) {
+        out += text.slice(i);
+        break;
+      }
+      const start = i + m.index;
+      out += text.slice(i, start);
+      const open = start + m[0].length - 1;
+      let depth = 0;
+      let end = -1;
+      for (let j = open; j < text.length; j++) {
+        if (text[j] === "(") depth++;
+        else if (text[j] === ")") {
+          depth--;
+          if (depth === 0) {
+            end = j;
+            break;
+          }
+        }
+      }
+      if (end === -1) throw new Error("unbalanced min/max/clamp( in GLSL source");
+      const args = splitTopLevel(text.slice(open + 1, end));
+      const scalar = /^[+-]?(?:\d+\.?\d*|\.\d+)$/;
+      const arity = args.map((arg) => arg.match(/\bvec([234])f\s*\(/)?.[1] || arg.match(/\.([xyzwrgba]{2,4})\b/)?.[1].length).find(Boolean);
+      if (arity && (args.length === 2 || args.length === 3)) {
+        for (let n = 0; n < args.length; n++) {
+          if (scalar.test(args[n])) args[n] = `vec${arity}f(${args[n]})`;
+        }
+      }
+      out += `${m[0]}${args.join(", ")})`;
+      i = end + 1;
+    }
+    text = out;
+  }
   text = text.replace(/\bfragColor\s*=/g, "return ");
   text = text.replace(
     new RegExp(`\\b(float|int|vec[234]|mat[234])\\s+(${IDENT})\\s*=`, "g"),
@@ -1350,7 +1380,6 @@ function translateFusedProgram(fusedGlsl, { textureInputs, uniformNames }) {
   text = text.replace(/\bfn main\(/, "@fragment\nfn fs_main(in: VertexOutput) -> @location(0) vec4f");
   text = text.replace(/gl_FragCoord\.x/g, "in.position.x");
   text = text.replace(/gl_FragCoord\.y/g, "in.position.y");
-  text = text.replace(/params\.resolution\.y\s*-\s*in\.position\.y/g, "in.position.y");
   for (const name of uniformNames || []) {
     if (new RegExp(`(?<!params\\.)\\b${name}\\b`).test(text)) {
       throw new Error(`fused WGSL translation left a bare dynamic uniform reference: ${name}`);
@@ -1392,28 +1421,28 @@ ${translated}
 }`;
   const sample = (tex, coord) => `textureSample(${tex}, ${samplers[tex]}, ${coord})`;
   let main;
-  const st = "let _st = in.position.xy / params.resolution;";
+  const st = "let _st = vec2f(in.position.x, params.resolution.y - in.position.y) / params.resolution;";
   if (type === "src") {
     main = `${st}
   return ${fnName}(_st${wrapperInputs.map((i) => `, params.${i.name}`).join("")});`;
   } else if (type === "coord") {
     main = `${st}
   let newUV = ${fnName}(_st${wrapperInputs.map((i) => `, params.${i.name}`).join("")});
-  return ${sample("inputTex", "vec2f(newUV.x, newUV.y)")};`;
+  return ${sample("inputTex", "vec2f(newUV.x, 1.0 - newUV.y)")};`;
   } else if (type === "color") {
     main = `${st}
-  let _c0 = ${sample("inputTex", "_st")};
+  let _c0 = ${sample("inputTex", "vec2f(_st.x, 1.0 - _st.y)")};
   return ${fnName}(_c0${wrapperInputs.map((i) => `, params.${i.name}`).join("")});`;
   } else if (type === "combine") {
     main = `${st}
-  let _c0 = ${sample("inputTex", "_st")};
-  let _c1 = ${sample("tex", "_st")};
+  let _c0 = ${sample("inputTex", "vec2f(_st.x, 1.0 - _st.y)")};
+  let _c1 = ${sample("tex", "vec2f(_st.x, 1.0 - _st.y)")};
   return ${fnName}(_c0, _c1${wrapperInputs.map((i) => `, params.${i.name}`).join("")});`;
   } else if (type === "combineCoord") {
     main = `${st}
-  let _c0 = ${sample("tex", "_st")};
+  let _c0 = ${sample("tex", "vec2f(_st.x, 1.0 - _st.y)")};
   let newUV = ${fnName}(_st, _c0${wrapperInputs.map((i) => `, params.${i.name}`).join("")});
-  return ${sample("inputTex", "vec2f(newUV.x, newUV.y)")};`;
+  return ${sample("inputTex", "vec2f(newUV.x, 1.0 - newUV.y)")};`;
   } else {
     throw new Error(`Unknown Hydra effect type '${type}'`);
   }

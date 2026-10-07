@@ -69,6 +69,7 @@
       if (!SKIP_WEBGL) emit(`webgl-backend ${glRenderer.pipeline.backend.getName ? glRenderer.pipeline.backend.getName() : 'unknown'}`)
 
       let gpuRenderer
+      let passed = 0
       try {
         gpuRenderer = await makeRenderer(document.getElementById('webgpu'), true)
         try {
@@ -78,24 +79,25 @@
         } catch (_) {}
         const gpuPixels = await render(gpuRenderer, document.getElementById('webgpu'), DSL)
         emit(`webgpu-backend ${gpuRenderer.pipeline.backend.getName ? gpuRenderer.pipeline.backend.getName() : 'unknown'}`)
-        // Direct texture readback (engine WebGPU readPixels) to separate
-        // render correctness from canvas presentation in this probe.
+        // Direct texture readback is in the engine's internal orientation;
+        // presentation flips its rows before displaying them on the canvas.
         try {
           const state = gpuRenderer.pipeline.surfaces.get('o0')
-          const direct = await gpuRenderer.pipeline.backend.readPixels(state.read)
-          const directBytes = direct instanceof Uint8Array ? direct : new Uint8Array(direct.buffer || direct)
+          const { data: directBytes } = await gpuRenderer.pipeline.backend.readPixels(state.read)
           let d2 = 0, md2 = 0, nonZero = 0
           const limit = glPixels ? Math.min(directBytes.length, glPixels.length) : directBytes.length
           for (let i = 0; i < limit; i++) {
             if (directBytes[i] !== 0) nonZero++
             if (glPixels) {
-              const delta = Math.abs(directBytes[i] - glPixels[i])
+              const row = Math.floor(i / (W * 4))
+              const reference = (H - 1 - row) * W * 4 + (i % (W * 4))
+              const delta = Math.abs(directBytes[i] - glPixels[reference])
               if (delta !== 0) d2++
               if (delta > md2) md2 = delta
             }
           }
           const first = Array.from(directBytes.slice(0, 8))
-          emit(`webgpu-direct-read o0: nonZero=${nonZero} differing=${d2}/${limit} maxDelta=${md2} first=${JSON.stringify(first)}`)
+          emit(`webgpu-direct-read o0: nonZero=${nonZero} differingAfterPresentationFlip=${d2}/${limit} maxDelta=${md2} first=${JSON.stringify(first)}`)
         } catch (e) {
           emit(`webgpu-direct-read failed: ${e.message}`)
         }
@@ -110,12 +112,15 @@
           const o = (y * W + x) * 4
           samples.push({ at: [x, y], gl: Array.from(glPixels.slice(o, o + 4)), gpu: Array.from(gpuPixels.slice(o, o + 4)) })
         }
-        if (differing === 0) emit('ok    webgpu_gradient_posterize')
+        if (differing === 0) {
+          emit('ok    webgpu_gradient_posterize')
+          passed = 1
+        }
         else emit(`FAIL  webgpu_gradient_posterize  →  ${differing}/${gpuPixels.length} bytes differ; max delta ${maxDelta}; samples ${JSON.stringify(samples)}`)
       } catch (e) {
         emit(`THROW webgpu_gradient_posterize  →  ${e && e.message ? e.message : String(e)}`)
       }
-      emit('=== 1 ok, 0 fail / 1 total ===')
+      emit(`=== ${passed} ok, ${1 - passed} fail / 1 total ===`)
     } catch (error) {
       emit(`THROW probe  →  ${error && error.message ? error.message : String(error)}`)
       emit('=== probe failed ===')
