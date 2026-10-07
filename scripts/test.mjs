@@ -10,6 +10,7 @@
 import { execFileSync, spawn, spawnSync } from 'node:child_process'
 import { Buffer } from 'node:buffer'
 import { cleanupScratchBundle, LEGACY_BUNDLE, materializeLegacyBundle } from './upstream-bundle.mjs'
+import { TOTAL_CASES } from './ci-gate.mjs'
 import { accessSync, constants, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs'
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
@@ -46,8 +47,8 @@ console.log(`[test] using Chrome binary: ${CHROME}`)
 // still pins the server port.
 const PORT = process.env.PORT ? Number(process.env.PORT) : await pickFreePort()
 const SWEEPS = [
-  { url: '/dev-noisemaker/pixel-parity.html', name: 'pixel-parity-64x64', expectPass: 78 },
-  { url: '/dev-noisemaker/pixel-parity.html?w=96&h=48', name: 'pixel-parity-96x48', expectPass: 78 }
+  { url: '/dev-noisemaker/pixel-parity.html', name: 'pixel-parity-64x64', expectPass: TOTAL_CASES },
+  { url: '/dev-noisemaker/pixel-parity.html?w=96&h=48', name: 'pixel-parity-96x48', expectPass: TOTAL_CASES }
 ]
 
 function pickFreePort() {

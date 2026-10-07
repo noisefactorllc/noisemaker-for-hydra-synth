@@ -316,6 +316,182 @@
         name: 'sum_default_scale',
         reference: () => [1, 1, 1, 1],
         dsl: 'gradient(speed: 0).sum()'
+      },
+      // Non-default parameter values for the 29 catalog effects the cases above
+      // run at defaults only: the coord and repeat, combine, and color groups.
+      {
+        name: 'nondefault_scale',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).scale(0.7, 1.3, 0.8, 0.4, 0.6),
+        dsl: 'gradient(speed: 0).scale(amount: 0.7, xMult: 1.3, yMult: 0.8, offsetX: 0.4, offsetY: 0.6)'
+      },
+      {
+        name: 'nondefault_pixelate',
+        time: 0.25,
+        legacy: hydra => hydra.synth.shape(5, 0.4, 0.2).pixelate(12, 7),
+        dsl: 'shape(sides: 5, radius: 0.4, smoothing: 0.2).pixelate(pixelX: 12, pixelY: 7)'
+      },
+      {
+        name: 'nondefault_repeat',
+        time: 0.25,
+        legacy: hydra => hydra.synth.shape(3, 0.5, 0.1).repeat(2.5, 4, 0.2, 0.1),
+        dsl: 'shape(sides: 3, radius: 0.5, smoothing: 0.1).repeat(repeatX: 2.5, repeatY: 4, offsetX: 0.2, offsetY: 0.1)'
+      },
+      {
+        name: 'nondefault_modulateRepeat',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).modulateRepeat(hydra.synth.shape(4, 0.4, 0.2), 2, 5, 0.3, 0.7),
+        dsl: 'gradient(speed: 0).modulateRepeat(tex: shape(sides: 4, radius: 0.4, smoothing: 0.2), repeatX: 2, repeatY: 5, offsetX: 0.3, offsetY: 0.7)'
+      },
+      {
+        name: 'nondefault_repeatX',
+        time: 0.25,
+        legacy: hydra => hydra.synth.shape(3, 0.5, 0.1).repeatX(4.5, 0.25),
+        dsl: 'shape(sides: 3, radius: 0.5, smoothing: 0.1).repeatX(reps: 4.5, offset: 0.25)'
+      },
+      {
+        name: 'nondefault_modulateRepeatX',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).modulateRepeatX(hydra.synth.shape(4, 0.4, 0.2), 5, 0.2),
+        dsl: 'gradient(speed: 0).modulateRepeatX(tex: shape(sides: 4, radius: 0.4, smoothing: 0.2), reps: 5, offset: 0.2)'
+      },
+      {
+        name: 'nondefault_repeatY',
+        time: 0.25,
+        legacy: hydra => hydra.synth.shape(3, 0.5, 0.1).repeatY(2, 0.4),
+        dsl: 'shape(sides: 3, radius: 0.5, smoothing: 0.1).repeatY(reps: 2, offset: 0.4)'
+      },
+      {
+        name: 'nondefault_modulateRepeatY',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).modulateRepeatY(hydra.synth.shape(4, 0.4, 0.2), 4, 0.8),
+        dsl: 'gradient(speed: 0).modulateRepeatY(tex: shape(sides: 4, radius: 0.4, smoothing: 0.2), reps: 4, offset: 0.8)'
+      },
+      {
+        name: 'nondefault_modulateKaleid',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).modulateKaleid(hydra.synth.shape(3, 0.5, 0.2), 7),
+        dsl: 'gradient(speed: 0).modulateKaleid(tex: shape(sides: 3, radius: 0.5, smoothing: 0.2), nSides: 7)'
+      },
+      {
+        name: 'nondefault_scrollX',
+        time: 0.25,
+        legacy: hydra => hydra.synth.shape(4, 0.4, 0.2).scrollX(0.2, 0.3),
+        dsl: 'shape(sides: 4, radius: 0.4, smoothing: 0.2).scrollX(scrollX: 0.2, speed: 0.3)'
+      },
+      {
+        name: 'nondefault_modulateScrollX',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).modulateScrollX(hydra.synth.shape(4, 0.4, 0.2), 0.3, 0.2),
+        dsl: 'gradient(speed: 0).modulateScrollX(tex: shape(sides: 4, radius: 0.4, smoothing: 0.2), scrollX: 0.3, speed: 0.2)'
+      },
+      {
+        name: 'nondefault_scrollY',
+        time: 0.25,
+        legacy: hydra => hydra.synth.shape(4, 0.4, 0.2).scrollY(-0.15, 0.25),
+        dsl: 'shape(sides: 4, radius: 0.4, smoothing: 0.2).scrollY(scrollY: -0.15, speed: 0.25)'
+      },
+      {
+        name: 'nondefault_modulateScrollY',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).modulateScrollY(hydra.synth.shape(4, 0.4, 0.2), -0.2, 0.1),
+        dsl: 'gradient(speed: 0).modulateScrollY(tex: shape(sides: 4, radius: 0.4, smoothing: 0.2), scrollY: -0.2, speed: 0.1)'
+      },
+      {
+        name: 'nondefault_add',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).add(hydra.synth.shape(4, 0.5, 0.1), 0.6),
+        dsl: 'gradient(speed: 0).add(tex: shape(sides: 4, radius: 0.5, smoothing: 0.1), amount: 0.6)'
+      },
+      {
+        name: 'nondefault_sub',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).sub(hydra.synth.shape(4, 0.5, 0.1), 0.45),
+        dsl: 'gradient(speed: 0).sub(tex: shape(sides: 4, radius: 0.5, smoothing: 0.1), amount: 0.45)'
+      },
+      {
+        name: 'nondefault_mult',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).mult(hydra.synth.shape(4, 0.5, 0.1), 0.7),
+        dsl: 'gradient(speed: 0).mult(tex: shape(sides: 4, radius: 0.5, smoothing: 0.1), amount: 0.7)'
+      },
+      {
+        name: 'nondefault_modulate',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).modulate(hydra.synth.shape(5, 0.4, 0.2), 0.35),
+        dsl: 'gradient(speed: 0).modulate(tex: shape(sides: 5, radius: 0.4, smoothing: 0.2), amount: 0.35)'
+      },
+      {
+        name: 'nondefault_modulateScale',
+        time: 0.25,
+        legacy: hydra => hydra.synth.shape(4, 0.4, 0.1).modulateScale(hydra.synth.gradient(0), 2.5, 0.5),
+        dsl: 'shape(sides: 4, radius: 0.4, smoothing: 0.1).modulateScale(tex: gradient(speed: 0), multiple: 2.5, offset: 0.5)'
+      },
+      {
+        name: 'nondefault_modulatePixelate',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).modulatePixelate(hydra.synth.shape(4, 0.5, 0.2), 20, 6),
+        dsl: 'gradient(speed: 0).modulatePixelate(tex: shape(sides: 4, radius: 0.5, smoothing: 0.2), multiple: 20, offset: 6)'
+      },
+      {
+        name: 'nondefault_modulateHue',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).modulateHue(hydra.synth.shape(3, 0.5, 0.2), 3.5),
+        dsl: 'gradient(speed: 0).modulateHue(tex: shape(sides: 3, radius: 0.5, smoothing: 0.2), amount: 3.5)'
+      },
+      {
+        name: 'nondefault_brightness',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).brightness(-0.25),
+        dsl: 'gradient(speed: 0).brightness(amount: -0.25)'
+      },
+      {
+        name: 'nondefault_luma',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).luma(0.3, 0.25),
+        dsl: 'gradient(speed: 0).luma(threshold: 0.3, tolerance: 0.25)'
+      },
+      {
+        name: 'nondefault_thresh',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).thresh(0.35, 0.2),
+        dsl: 'gradient(speed: 0).thresh(threshold: 0.35, tolerance: 0.2)'
+      },
+      {
+        name: 'nondefault_color',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).color(0.8, 0.3, 1.2, 0.9),
+        dsl: 'gradient(speed: 0).color(r: 0.8, g: 0.3, b: 1.2, a: 0.9)'
+      },
+      {
+        name: 'nondefault_colorama',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).colorama(0.35),
+        dsl: 'gradient(speed: 0).colorama(amount: 0.35)'
+      },
+      {
+        name: 'nondefault_r',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).r(1.6, 0.1),
+        dsl: 'gradient(speed: 0).r(scale: 1.6, offset: 0.1)'
+      },
+      {
+        name: 'nondefault_g',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).g(0.7, -0.05),
+        dsl: 'gradient(speed: 0).g(scale: 0.7, offset: -0.05)'
+      },
+      {
+        name: 'nondefault_b',
+        time: 0.25,
+        legacy: hydra => hydra.synth.gradient(0).b(2.2, 0.15),
+        dsl: 'gradient(speed: 0).b(scale: 2.2, offset: 0.15)'
+      },
+      {
+        name: 'nondefault_a',
+        time: 0.25,
+        legacy: hydra => hydra.synth.shape(4, 0.5, 0.2).a(0.6, 0.2),
+        dsl: 'shape(sides: 4, radius: 0.5, smoothing: 0.2).a(scale: 0.6, offset: 0.2)'
       }
     )
 

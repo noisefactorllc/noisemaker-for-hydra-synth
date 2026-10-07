@@ -4,7 +4,7 @@
  *
  * 1. Unit suite: `node --test test/*.test.mjs` — failures, skips, todos and
  *    cancellations must all be 0.
- * 2. Rendered sweep: `node scripts/test.mjs` — the full 71-case denominator
+ * 2. Rendered sweep: `node scripts/test.mjs` — the full TOTAL_CASES denominator
  *    per size sweep at 64x64 and 96x48 under the strict zero-failure policy
  *    ("mismatches must fail qualification"). No tolerance is ever applied.
  *
@@ -24,6 +24,7 @@ import { spawnSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { trackedTreeHash } from './tree-hash.mjs'
+import { TOTAL_CASES } from './ci-gate.mjs'
 
 const tests = readdirSync(join(process.cwd(), 'test'))
   .filter(f => f.endsWith('.test.mjs'))
@@ -121,7 +122,8 @@ try { reply = JSON.parse(run.stdout) } catch { /* fallthrough */ }
 console.log('[scripts/test] host sweep output tail:')
 console.log((reply?.output || '').slice(-1200))
 const output = reply?.output || ''
-const greenSizes = (output.match(/71 ok, 0 fail \(expected >= 71 ok, 0 fail\)/g) || []).length
+const greenLine = `${TOTAL_CASES} ok, 0 fail (expected >= ${TOTAL_CASES} ok, 0 fail)`
+const greenSizes = output.split(greenLine).length - 1
 const treeLine = `tree ${sha || 'unknown'}${contentHash ? ` content ${contentHash}` : ''}`
 const treeMatches = output.includes(treeLine)
 if (reply?.exit_code === 0 && !reply?.timed_out && greenSizes >= 2 && !/FAIL|THROW/.test(output) && treeMatches) {

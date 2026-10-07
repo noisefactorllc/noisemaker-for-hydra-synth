@@ -5,7 +5,7 @@
  * portion of the gate:
  *
  *  - Every expected case executes: ok + fail must equal the full
- *    denominator (71 cases per size sweep), enforced from independent per-case line
+ *    denominator (TOTAL_CASES per size sweep), enforced from independent per-case line
  *    accounting. Missing cases fail the gate.
  *  - Failure policy (criterion: "mismatches must fail qualification"):
  *    strict only. The sweep must be fully exact (0 failures). There is
@@ -74,15 +74,17 @@ let addedUpstream = false
 // workflow authority (the qualified macOS host record for the legacy
 // 58-case suite is 58/58 exact). A complete expected-case inventory is
 // not claimed by this runner.
-// The page emits 78 cases per size sweep (the page runs once at 64x64 and
+// The page emits 107 cases per size sweep (the page runs once at 64x64 and
 // once at 96x48 via ?w=96&h=48): `sum` was never a generated legacy case (the
 // authority bundle's sum shader cannot compile) and stays excluded there;
 // `sum_reference`, `sum_default_scale`, the fifteen parameter-matrix cases
 // (nine bounded points plus the explicit second-time-point coverage),
 // `rotate_animated_uniform_parameter` and the two generator second-time-point
 // cases (`osc_nonzero_time_t075`, `voronoi_src_t075`) were added on top
-// of the original generated fixtures. Denominator is 78 per sweep.
-const TOTAL_CASES = 78
+// of the original generated fixtures, and 29 `nondefault_*` cases run the
+// effects the rest of the page covers only at defaults with non-default
+// values. Denominator is 107 per sweep.
+const TOTAL_CASES = 107
 export { TOTAL_CASES }
 
 function startServer(port) {
