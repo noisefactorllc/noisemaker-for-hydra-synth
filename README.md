@@ -37,7 +37,19 @@ renderer.start()
 
 ## Supported hosts and ownership
 
-Supported hosts are browsers with a WebGL2 implementation and network access to the engine CDN (`https://shaders.noisedeck.app/1`); the engine loads at runtime, so offline use is not supported. Measured hosts: Chromium 154.0.8037.57 headless (SwiftShader WebGL2, Debian 12 Linux), Firefox 155.0 (Mesa llvmpipe software WebGL2 under Xvfb, Debian 12 Linux), Chromium 153.0.8010.12 headless with hardware-accelerated WebGL2 (ANGLE Metal on Apple M4, macOS), and Chrome 153.0.8010.53 (Apple M4, macOS 26.5). Windows, GPU-hardware Linux, and Safari remain unmeasured. WebGPU is not supported; do not set `preferWebGPU: true`.
+Supported hosts are browsers with a WebGL2 implementation and network access to the engine CDN (`https://shaders.noisedeck.app/1`); the engine loads at runtime, so offline use is not supported. WebGPU is not supported; do not set `preferWebGPU: true`.
+
+Measured hosts, all at source 2569050 in [run 37728117034](https://github.com/noisefactorllc/noisemaker-for-hydra-synth/actions/runs/37728117034) on GitHub-hosted runners:
+
+- Linux: Google Chrome 154.0.8037.57 headless on Ubuntu 24.04, without a GPU. The rendered-parity sweep is 108/108 byte-exact at 64×64 and at 96×48.
+- macOS: Chromium 141.0.7390.37 headless shell on macOS 15. The rendered-parity sweep is 108/108 byte-exact at both sizes.
+- Safari on macOS 15 through `safaridriver`, WebGL renderer `Apple GPU`. The rendered-parity sweep is 108/108 at 64×64, and the installed-package workflow passes (workflow page 13/13, bundle page 1/1, reinstall, removal).
+- Windows: Google Chrome on Windows Server 2025. The installed-package workflow test passes (1/1: pack, install, render, reinstall, remove). The rendered-parity sweep does not run on Windows.
+- Minimum version: Chromium 129.0.6668.29 on Ubuntu 24.04. The installed-package workflow test passes (1/1).
+
+Not measured: Linux with a hardware GPU, the rendered-parity sweep on Windows, and Firefox at the current source (its last measurement, Firefox 155.0 on Mesa llvmpipe, was at an earlier source).
+
+The current record is the [compatibility report](https://github.com/noisefactorllc/noisemaker-for-hydra-synth/issues/4). Known qualification limits are the [issues labelled `gap`](https://github.com/noisefactorllc/noisemaker-for-hydra-synth/issues?q=is%3Aissue+label%3Agap).
 
 Resource ownership:
 
