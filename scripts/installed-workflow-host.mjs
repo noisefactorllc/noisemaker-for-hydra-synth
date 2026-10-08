@@ -161,6 +161,17 @@ async function main() {
     // Shared consumer preparation (also used by the upgrade-over leg).
     writeFileSync(join(consumer, 'input-image.png'), encodeTestPng(16, 16))
     run('npm', ['init', '-y'], { cwd: consumer })
+    // Pack the candidate before selecting an upgrade discriminator: only
+    // bytes in both tarballs can prove what was actually installed.
+    const packArgs = ['pack', '--json', '--pack-destination', packDir]
+    const packRun = runReceipt('npm', packArgs)
+    assert.equal(packRun.status, 0, 'npm pack failed')
+    evidence.commands.push(packRun.receipt)
+    const packJson = JSON.parse(packRun.stdout)
+    const tarball = resolve(join(packDir, packJson[0].filename))
+    assert.ok(existsSync(tarball), 'npm pack produced a tarball')
+    evidence.pack = { tarball: tarball, filename: packJson[0].filename, file_count: packJson[0].files ? packJson[0].files.length : null, size_bytes: packJson[0].size }
+
     // Optional upgrade-over preparation: pack a prior published revision and
     // install it into the consumer first. The candidate install below then
     // measures an upgrade (install over an existing installation), not a
@@ -185,19 +196,28 @@ async function main() {
       const priorJson = JSON.parse(priorPackRun.stdout)
       const priorTarball = resolve(join(priorPackDir, priorJson[0].filename))
       assert.ok(existsSync(priorTarball), 'prior revision tarball exists')
-      // Content discriminator: a file that differs between the prior revision
-      // and this checkout, so the post-over-install tree can be proven to be
-      // the candidate's content (the version string alone cannot discriminate
-      // same-version revisions).
-      const discriminator = 'test/installed-workflow-page.mjs'
-      const sha256 = p => createHash('sha256').update(readFileSync(p)).digest('hex')
-      const priorSha = sha256(join(priorDir, discriminator))
-      const candidateSha = sha256(join(REPO, discriminator))
-      assert.notEqual(priorSha, candidateSha, 'discriminator must differ between revisions')
+      // Choose differing bytes present in both tarballs; a checkout file may
+      // be unchanged or excluded from the published package.
+      assert.ok(Array.isArray(priorJson[0].files) && Array.isArray(packJson[0].files), 'both packs must list their files')
+      const priorPaths = new Set(priorJson[0].files.map(file => file.path))
+      const sha256 = bytes => createHash('sha256').update(bytes).digest('hex')
+      const packedSha256 = (archive, file) => sha256(execFileSync('tar', ['-xOzf', archive, `package/${file}`]))
+      let discriminator, priorSha, candidateSha
+      for (const { path } of packJson[0].files) {
+        if (!priorPaths.has(path)) continue
+        const oldHash = packedSha256(priorTarball, path)
+        const newHash = packedSha256(tarball, path)
+        if (oldHash === newHash) continue
+        discriminator = path
+        priorSha = oldHash
+        candidateSha = newHash
+        break
+      }
+      assert.ok(discriminator, 'packed revisions need a shared file with differing bytes')
       const priorInstallRun = runReceipt('npm', ['install', '--ignore-scripts', '--bin-links=false', '--no-audit', '--no-fund', priorTarball], {}, consumer)
       assert.equal(priorInstallRun.status, 0, 'npm install of the prior revision failed')
       evidence.commands.push(priorInstallRun.receipt)
-      const priorInstalledSha = sha256(join(consumer, 'node_modules', 'noisemaker-for-hydra-synth', discriminator))
+      const priorInstalledSha = sha256(readFileSync(join(consumer, 'node_modules', 'noisemaker-for-hydra-synth', discriminator)))
       assert.equal(priorInstalledSha, priorSha, 'prior install carries the prior revision content')
       const priorInstalled = JSON.parse(readFileSync(join(consumer, 'node_modules', 'noisemaker-for-hydra-synth', 'package.json'), 'utf8'))
       assert.equal(priorInstalled.name, 'noisemaker-for-hydra-synth')
@@ -214,16 +234,6 @@ async function main() {
         }
       }
     }
-
-    // Pack the candidate from the checkout.
-    const packArgs = ['pack', '--json', '--pack-destination', packDir]
-    const packRun = runReceipt('npm', packArgs)
-    assert.equal(packRun.status, 0, 'npm pack failed')
-    evidence.commands.push(packRun.receipt)
-    const packJson = JSON.parse(packRun.stdout)
-    const tarball = resolve(join(packDir, packJson[0].filename))
-    assert.ok(existsSync(tarball), 'npm pack produced a tarball')
-    evidence.pack = { tarball: tarball, filename: packJson[0].filename, file_count: packJson[0].files ? packJson[0].files.length : null, size_bytes: packJson[0].size }
 
     // Install into an isolated consumer (the consumer root was already
     // prepared above, so npm never walks up out of the scratch consumer and
@@ -242,6 +252,7 @@ async function main() {
       const installedSha = createHash('sha256').update(readFileSync(join(consumer, 'node_modules', 'noisemaker-for-hydra-synth', evidence.upgrade.discriminator.file))).digest('hex')
       evidence.upgrade.discriminator.over_installed_sha256 = installedSha
       evidence.upgrade.discriminator.matches_candidate = installedSha === evidence.upgrade.discriminator.candidate_sha256
+      assert.ok(evidence.upgrade.discriminator.matches_candidate, 'candidate install carries the candidate tarball content')
       evidence.upgrade.candidate_version = installed.version
       evidence.upgrade.over_install = { receipt: installRun.receipt, pass: installRun.status === 0 && evidence.upgrade.discriminator.matches_candidate }
     }

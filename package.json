@@ -14,6 +14,15 @@
     }
   },
   "unpkg": "./dist/hydra-synth.js",
+  "files": [
+    "src/",
+    "dist/",
+    "scripts/build.mjs",
+    "docs/hero.jpg",
+    "LICENSE",
+    "README.md",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "dev": "http-server -p 8765",
     "build": "node scripts/build.mjs",
