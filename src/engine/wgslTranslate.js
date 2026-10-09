@@ -120,9 +120,181 @@ import utilityGlsl from '../glsl/utility-functions.js'
 // programs carry the same functions, translated once. Utility bodies use no
 // samplers and no uniforms (no time/resolution references). Declared after
 // IDENT because the translation templates interpolate it at call time.
+// Scalar-argument splatting for componentwise builtin overloads. GLSL
+// broadcasts a scalar argument against vector ones (step(0.0, c),
+// max(0.6 - vec4(...), 0.0)); WGSL has no such mixed overloads.
+// Declared before UTILITY_WGSL, whose initializer runs the translator.
+const OVERLOAD_CALL = /\b(?:min|max|clamp|step|smoothstep)\s*\(/
+const SCALAR_LITERAL = /^[+-]?(?:\d+\.?\d*|\.\d+)$/
+
 const UTILITY_WGSL = Object.values(utilityGlsl)
   .map(utility => translateGlslStatements(utility.glsl, {}))
   .join('\n\n')
+
+// Vector width of one call argument, or null when undetectable. A bare
+// identifier resolves from the nearest preceding `var NAME: vecNf`
+// declaration in the enclosing function's body.
+function argVectorWidth(arg, scope) {
+  const ctor = arg.match(/\bvec([234])f\s*\(/)
+  if (ctor) return Number(ctor[1])
+  const swizzle = arg.match(/\.([xyzwrgba]{2,4})\b/)
+  if (swizzle) return swizzle[1].length
+  if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(arg)) {
+    const decls = [...scope.matchAll(new RegExp(`\\bvar\\s+${arg}\\s*:\\s*vec([234])f\\b`, 'g'))]
+    const last = decls[decls.length - 1]
+    if (last) return Number(last[1])
+  }
+  return null
+}
+
+// Splat pure scalar-literal arguments to the detected vector width within
+// one lexical scope (a function body, or the whole text when it holds no
+// function bodies).
+function splatScalarCalls(text) {
+  let out = ''
+  let i = 0
+  for (;;) {
+    const m = OVERLOAD_CALL.exec(text.slice(i))
+    if (!m) { out += text.slice(i); break }
+    const start = i + m.index
+    out += text.slice(i, start)
+    const open = start + m[0].length - 1
+    let depth = 0
+    let end = -1
+    for (let j = open; j < text.length; j++) {
+      if (text[j] === '(') depth++
+      else if (text[j] === ')') { depth--; if (depth === 0) { end = j; break } }
+    }
+    if (end === -1) throw new Error('unbalanced min/max/clamp/step( in GLSL source')
+    const args = splitTopLevel(text.slice(open + 1, end))
+    const arity = args.map(arg => argVectorWidth(arg, out + text.slice(i, start)))
+      .find(Boolean)
+    if (arity && (args.length === 2 || args.length === 3)) {
+      for (let n = 0; n < args.length; n++) {
+        if (SCALAR_LITERAL.test(args[n])) args[n] = `vec${arity}f(${args[n]})`
+      }
+    }
+    out += `${m[0]}${args.join(', ')})`
+    i = end + 1
+  }
+  return out
+}
+
+// Apply the splat pass per function body, so a bare identifier's declared
+// width is resolved within its own function (the GLSL-style fn headers
+// still carry return types at this pipeline stage). Text outside function
+// bodies is passed through unchanged.
+function splatScalarOverloads(text) {
+  const header = /\b(?:void|float|int|vec[234]|mat[234])\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*\{/g
+  const bodies = []
+  let m
+  while ((m = header.exec(text))) {
+    const open = m.index + m[0].length - 1
+    let depth = 0
+    let end = -1
+    for (let j = open; j < text.length; j++) {
+      if (text[j] === '{') depth++
+      else if (text[j] === '}') { depth--; if (depth === 0) { end = j; break } }
+    }
+    if (end === -1) break
+    bodies.push([open, end])
+    header.lastIndex = end + 1
+  }
+  if (bodies.length === 0) return splatScalarCalls(text)
+  let out = ''
+  let cursor = 0
+  for (const [open, end] of bodies) {
+    out += text.slice(cursor, open + 1)
+    out += splatScalarCalls(text.slice(open + 1, end))
+    cursor = end
+  }
+  out += text.slice(cursor)
+  return out
+}
+
+// WGSL function parameters are immutable; GLSL parameters are mutable
+// copies. An effect body that assigns to a leading parameter (`_st *=
+// scale;` in voronoi, `_st.x += ...` in the scroll family) must be
+// translated as a renamed parameter plus a local mutable copy, or Tint
+// rejects the program with "cannot assign to parameter".
+const ASSIGNMENT_OP = '(?:\\+=|-=|\\*=|/=|(?<![=!<>])=(?!=))'
+
+function paramIsMutated(body, name) {
+  return new RegExp(`(?<![\\w.])${name}\\b(?:\\.[A-Za-z0-9_]+)*\\s*${ASSIGNMENT_OP}`).test(body)
+}
+
+// Rewrite WGSL fn signatures so no declared parameter is assigned: the
+// body keeps its references under the original name, which now resolves to
+// the injected local copy, and the parameter itself is renamed to
+// `<name>_in`. Used on fully translated programs (the fused path), whose
+// fn signatures are already WGSL.
+function fixMutatedFnParams(text) {
+  const header = /\bfn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*(?:->\s*[^{;]*)?\{/g
+  let out = ''
+  let cursor = 0
+  let m
+  while ((m = header.exec(text))) {
+    const open = m.index + m[0].length - 1
+    let depth = 0
+    let end = -1
+    for (let j = open; j < text.length; j++) {
+      if (text[j] === '{') depth++
+      else if (text[j] === '}') { depth--; if (depth === 0) { end = j; break } }
+    }
+    if (end === -1) break
+    header.lastIndex = end + 1
+    const body = text.slice(open + 1, end)
+    const params = splitTopLevel(m[2])
+      .map(param => param.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.+)$/))
+      .filter(Boolean)
+    const decls = []
+    const rewritten = params.map(param => {
+      const name = param[1]
+      const type = param[2].trim()
+      if (paramIsMutated(body, name)) {
+        decls.push(`var ${name}: ${type} = ${name}_in;`)
+        return `${name}_in: ${type}`
+      }
+      return `${name}: ${type}`
+    })
+    if (decls.length > 0) {
+      const fixedHeader = m[0].replace(m[2], rewritten.join(', '))
+      out += text.slice(cursor, m.index) + fixedHeader + '\n' + decls.join('\n') + '\n' + body
+      cursor = end
+    } else {
+      out += text.slice(cursor, end)
+      cursor = end
+    }
+  }
+  out += text.slice(cursor)
+  return out
+}
+
+// Structural checker over a finished WGSL program: any fn whose body
+// assigns to one of its own declared parameters. Exported so the unit lint
+// pins the invariant corpus-wide with the same rule the translator applies.
+export function wgslParameterAssignments(wgsl) {
+  const violations = []
+  const header = /\bfn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*(?:->\s*[^{;]*)?\{/g
+  let m
+  while ((m = header.exec(wgsl))) {
+    const open = m.index + m[0].length - 1
+    let depth = 0
+    let end = -1
+    for (let j = open; j < wgsl.length; j++) {
+      if (wgsl[j] === '{') depth++
+      else if (wgsl[j] === '}') { depth--; if (depth === 0) { end = j; break } }
+    }
+    if (end === -1) break
+    header.lastIndex = end + 1
+    const body = wgsl.slice(open + 1, end)
+    for (const param of splitTopLevel(m[2])) {
+      const name = param.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*:/)?.[1]
+      if (name && paramIsMutated(body, name)) violations.push(`${m[1]}.${name}`)
+    }
+  }
+  return violations
+}
 
 // Statement-level GLSL -> WGSL translation for the port's constrained GLSL
 // subset (see the corpus inventory in test/wgsl-translate.test.mjs).
@@ -179,39 +351,6 @@ export function translateGlslStatements(glsl, { samplers = {}, uniformNames = []
   text = text.replace(/\bmat([234])\s*\(/g, (_, n) => `mat${n}x${n}f(`)
   text = text.replace(/\bfloat\s*\(/g, 'f32(')
   text = text.replace(/\bint\s*\(/g, 'i32(')
-  // GLSL broadcasts scalar bounds in min/max/clamp calls; WGSL requires
-  // all arguments to have the same vector type. The shared utility helpers
-  // use max(0.6 - vec4(...), 0.0) and clamp(p - K.xxx, 0.0, 1.0).
-  {
-    let out = ''
-    let i = 0
-    for (;;) {
-      const m = /\b(?:min|max|clamp)\s*\(/.exec(text.slice(i))
-      if (!m) { out += text.slice(i); break }
-      const start = i + m.index
-      out += text.slice(i, start)
-      const open = start + m[0].length - 1
-      let depth = 0
-      let end = -1
-      for (let j = open; j < text.length; j++) {
-        if (text[j] === '(') depth++
-        else if (text[j] === ')') { depth--; if (depth === 0) { end = j; break } }
-      }
-      if (end === -1) throw new Error('unbalanced min/max/clamp( in GLSL source')
-      const args = splitTopLevel(text.slice(open + 1, end))
-      const scalar = /^[+-]?(?:\d+\.?\d*|\.\d+)$/
-      const arity = args.map(arg => arg.match(/\bvec([234])f\s*\(/)?.[1] || arg.match(/\.([xyzwrgba]{2,4})\b/)?.[1].length)
-        .find(Boolean)
-      if (arity && (args.length === 2 || args.length === 3)) {
-        for (let n = 0; n < args.length; n++) {
-          if (scalar.test(args[n])) args[n] = `vec${arity}f(${args[n]})`
-        }
-      }
-      out += `${m[0]}${args.join(', ')})`
-      i = end + 1
-    }
-    text = out
-  }
   // GLSL writes results through the fixed out variable; WGSL fragment entry
   // points return the color.
   text = text.replace(/\bfragColor\s*=/g, 'return ')
@@ -225,6 +364,14 @@ export function translateGlslStatements(glsl, { samplers = {}, uniformNames = []
   // GLSL ++/-- have no WGSL equivalent.
   text = text.replace(new RegExp(`(${IDENT})\\s*\\+\\+`, 'g'), '$1 = $1 + 1')
   text = text.replace(new RegExp(`(${IDENT})\\s*--`, 'g'), '$1 = $1 - 1')
+  // GLSL broadcasts scalar arguments in componentwise builtin calls; WGSL's
+  // min/max/clamp/step/smoothstep require matching argument types, so pure
+  // scalar-literal arguments are splatted to the vector width of a sibling
+  // argument (from a vecNf constructor, a swizzle, or — for bare
+  // identifiers — the nearest preceding `var` declaration in the same
+  // function, which is the visible one because WGSL forbids shadowing).
+  // Runs after the declaration rewrite so declared widths are readable.
+  text = splatScalarOverloads(text)
   if (/%/.test(text)) throw new Error("GLSL '%' has no WGSL float equivalent and is not in the port's corpus")
   // Global uniforms become Params members. Fused programs additionally
   // declare their dynamic per-chain uniforms (e.g. oscillator references
@@ -334,6 +481,12 @@ export function translateFusedProgram(fusedGlsl, { textureInputs, uniformNames }
   text = text.replace(/\bfn main\(/, '@fragment\nfn fs_main(in: VertexOutput) -> @location(0) vec4f')
   text = text.replace(/gl_FragCoord\.x/g, 'in.position.x')
   text = text.replace(/gl_FragCoord\.y/g, 'in.position.y')
+  // GLSL parameters are mutable copies; WGSL parameters are immutable. The
+  // fused wrappers inherit the effect bodies, some of which assign to their
+  // leading parameter (voronoi's `_st *= scale`, the scroll family's
+  // `_st.x += ...`). Rename each mutated parameter and inject the local
+  // mutable copy its body expects.
+  text = fixMutatedFnParams(text)
   // Self-check: every dynamic uniform reference must have been rewritten to
   // a Params member. A bare `_hydra_*` uniform identifier would be an
   // undeclared identifier in WGSL (the engine compiles per program, so a
@@ -369,10 +522,21 @@ export function buildEffectWgsl({ name, type, glsl: body, wrapperInputs, passInp
     combine: [['_c0', 'vec4f'], ['_c1', 'vec4f']],
     combineCoord: [['_st', 'vec2f'], ['_c0', 'vec4f']]
   }[type]
+  // GLSL parameters are mutable copies; WGSL parameters are immutable. A
+  // body that assigns to any of its parameters (voronoi's `_st *= scale`,
+  // the scroll family's `_st.x += ...`) gets a renamed parameter plus the
+  // local mutable copy it expects.
+  const candidateParams = [
+    ...leading,
+    ...wrapperInputs.map(i => [i.name, glslTypeToWgsl(i.type)])
+  ]
+  const mutated = candidateParams.filter(([arg]) => paramIsMutated(translated, arg))
+  const paramToken = ([arg, t]) => (mutated.some(([m]) => m === arg) ? `${arg}_in: ${t}` : `${arg}: ${t}`)
   const fnName = `_hydra_${name}`
-  const params = leading.map(([arg, t]) => `${arg}: ${t}`)
-  const extraParams = wrapperInputs.map(i => `${i.name}: ${glslTypeToWgsl(i.type)}`)
-  const wrapper = `fn ${fnName}(${[...params, ...extraParams].join(', ')}) -> ${ret} {\n${translated}\n}`
+  const params = leading.map(paramToken)
+  const extraParams = wrapperInputs.map(i => paramToken([i.name, glslTypeToWgsl(i.type)]))
+  const copies = mutated.map(([arg, t]) => `var ${arg}: ${t} = ${arg}_in;`)
+  const wrapper = `fn ${fnName}(${[...params, ...extraParams].join(', ')}) -> ${ret} {\n${copies.length > 0 ? copies.join('\n') + '\n' : ''}${translated}\n}`
 
   // Fragment main, mirroring each GLSL template and the engine's internal
   // texture orientation (see module comment).

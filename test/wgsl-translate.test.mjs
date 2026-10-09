@@ -10,6 +10,7 @@ import {
   translateAtan,
   translateFusedProgram,
   translateGlslStatements,
+  wgslParameterAssignments,
   wgslTypeForUniformValue
 } from '../src/engine/wgslTranslate.js'
 
@@ -82,6 +83,10 @@ function lintWgsl(wgsl, label) {
   }
   assert.equal(depth, 0, `${label}: unbalanced braces`)
   assert.deepEqual(leftovers, [], `${label}: GLSL leftovers in WGSL`)
+  // WGSL parameters are immutable; a body that assigns to one of its own
+  // parameters is rejected by Tint ("cannot assign to parameter") and must
+  // go through the translator's renamed-parameter + mutable-copy rewrite.
+  assert.deepEqual(wgslParameterAssignments(wgsl), [], `${label}: assignments to fn parameters`)
 }
 
 test('every executable Hydra effect translates to a structurally valid WGSL program', () => {
@@ -274,6 +279,64 @@ void main() {
   // struct name must match the engine's *Params|*Uniforms|*Config|*Settings
   // scan, with the var<uniform> declaration pointing at it.
   assert.match(wgsl, /struct Params \{[\s\S]*?\}\n@group\(0\) @binding\(\d+\) var<uniform> params: Params;/)
+})
+
+test('bodies that assign to a leading parameter get a renamed parameter and a mutable copy', () => {
+  // voronoi's `_st *= scale;` and the scroll family's `_st.x += ...` assign
+  // to the GLSL parameter, which is a mutable copy in GLSL but immutable in
+  // WGSL; the wrapper must rename the parameter and declare the copy.
+  for (const effectName of ['voronoi', 'scroll', 'scrollX', 'scrollY', 'modulateScrollX', 'modulateScrollY']) {
+    const effect = glslFunctions().find(e => e.name === effectName)
+    const wgsl = buildProgram(effect)
+    assert.match(wgsl, new RegExp(`fn _hydra_${effectName}\\(_st_in: vec2f,`), `${effectName}: renamed parameter`)
+    assert.match(wgsl, /var _st: vec2f = _st_in;/, `${effectName}: mutable copy`)
+    lintWgsl(wgsl, effectName)
+  }
+  // A body that only reads its parameter keeps the plain parameter.
+  const gradient = glslFunctions().find(e => e.name === 'gradient')
+  const gradientWgsl = buildProgram(gradient)
+  assert.match(gradientWgsl, /fn _hydra_gradient\(_st: vec2f,/)
+})
+
+test('scalar step edges splat to the declared vector width of a sibling argument', () => {
+  // The `color` effect's `vec4 pos = step(0.0, c);` broadcasts a scalar edge
+  // against a vec4 variable; WGSL has no step(abstract-float, vecN<T>)
+  // overload, so the edge must splat from `c`'s declared width.
+  const color = glslFunctions().find(e => e.name === 'color')
+  const wgsl = buildProgram(color)
+  assert.match(wgsl, /var pos: vec4f = step\(vec4f\(0\.0\), c\);/)
+  lintWgsl(wgsl, 'color')
+})
+
+test('fused voronoi program translates to Tint-valid WGSL', async () => {
+  const { buildHydraShaderOverrides } = await import('../src/engine/fuseHydraPlan.js')
+  const compiled = {
+    plans: [{
+      chain: [
+        { op: 'hydra.voronoi', args: {}, from: null, temp: 0 },
+        {
+          op: 'hydra.posterize',
+          args: { bins: 5, gamma: 0.7 },
+          from: 0,
+          temp: 1
+        },
+        {
+          op: '_write',
+          args: { tex: { kind: 'output', name: 'o0' } },
+          from: 1,
+          temp: 2,
+          builtin: true
+        }
+      ],
+      write: { kind: 'output', name: 'o0' }
+    }]
+  }
+  const result = buildHydraShaderOverrides(compiled)
+  const override = result.shaderOverrides[1].posterize
+  assert.ok(override.wgsl, 'fused voronoi program has WGSL source')
+  assert.match(override.wgsl, /fn _hydra_voronoi\(_st_in: vec2f,/)
+  assert.match(override.wgsl, /var _st: vec2f = _st_in;/)
+  lintWgsl(override.wgsl, 'fused-voronoi')
 })
 
 test('wgslTypeForUniformValue maps arrays to vecNf and scalars to f32', () => {

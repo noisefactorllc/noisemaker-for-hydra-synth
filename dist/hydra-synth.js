@@ -1230,7 +1230,140 @@ var HydraEffects = (() => {
     return out;
   }
   var IDENT = "[A-Za-z_][A-Za-z0-9_]*";
+  var OVERLOAD_CALL = /\b(?:min|max|clamp|step|smoothstep)\s*\(/;
+  var SCALAR_LITERAL = /^[+-]?(?:\d+\.?\d*|\.\d+)$/;
   var UTILITY_WGSL = Object.values(utility_functions_default).map((utility) => translateGlslStatements(utility.glsl, {})).join("\n\n");
+  function argVectorWidth(arg, scope) {
+    const ctor = arg.match(/\bvec([234])f\s*\(/);
+    if (ctor) return Number(ctor[1]);
+    const swizzle = arg.match(/\.([xyzwrgba]{2,4})\b/);
+    if (swizzle) return swizzle[1].length;
+    if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(arg)) {
+      const decls = [...scope.matchAll(new RegExp(`\\bvar\\s+${arg}\\s*:\\s*vec([234])f\\b`, "g"))];
+      const last = decls[decls.length - 1];
+      if (last) return Number(last[1]);
+    }
+    return null;
+  }
+  function splatScalarCalls(text) {
+    let out = "";
+    let i = 0;
+    for (; ; ) {
+      const m = OVERLOAD_CALL.exec(text.slice(i));
+      if (!m) {
+        out += text.slice(i);
+        break;
+      }
+      const start = i + m.index;
+      out += text.slice(i, start);
+      const open = start + m[0].length - 1;
+      let depth = 0;
+      let end = -1;
+      for (let j = open; j < text.length; j++) {
+        if (text[j] === "(") depth++;
+        else if (text[j] === ")") {
+          depth--;
+          if (depth === 0) {
+            end = j;
+            break;
+          }
+        }
+      }
+      if (end === -1) throw new Error("unbalanced min/max/clamp/step( in GLSL source");
+      const args = splitTopLevel(text.slice(open + 1, end));
+      const arity = args.map((arg) => argVectorWidth(arg, out + text.slice(i, start))).find(Boolean);
+      if (arity && (args.length === 2 || args.length === 3)) {
+        for (let n = 0; n < args.length; n++) {
+          if (SCALAR_LITERAL.test(args[n])) args[n] = `vec${arity}f(${args[n]})`;
+        }
+      }
+      out += `${m[0]}${args.join(", ")})`;
+      i = end + 1;
+    }
+    return out;
+  }
+  function splatScalarOverloads(text) {
+    const header = /\b(?:void|float|int|vec[234]|mat[234])\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*\{/g;
+    const bodies = [];
+    let m;
+    while (m = header.exec(text)) {
+      const open = m.index + m[0].length - 1;
+      let depth = 0;
+      let end = -1;
+      for (let j = open; j < text.length; j++) {
+        if (text[j] === "{") depth++;
+        else if (text[j] === "}") {
+          depth--;
+          if (depth === 0) {
+            end = j;
+            break;
+          }
+        }
+      }
+      if (end === -1) break;
+      bodies.push([open, end]);
+      header.lastIndex = end + 1;
+    }
+    if (bodies.length === 0) return splatScalarCalls(text);
+    let out = "";
+    let cursor = 0;
+    for (const [open, end] of bodies) {
+      out += text.slice(cursor, open + 1);
+      out += splatScalarCalls(text.slice(open + 1, end));
+      cursor = end;
+    }
+    out += text.slice(cursor);
+    return out;
+  }
+  var ASSIGNMENT_OP = "(?:\\+=|-=|\\*=|/=|(?<![=!<>])=(?!=))";
+  function paramIsMutated(body, name) {
+    return new RegExp(`(?<![\\w.])${name}\\b(?:\\.[A-Za-z0-9_]+)*\\s*${ASSIGNMENT_OP}`).test(body);
+  }
+  function fixMutatedFnParams(text) {
+    const header = /\bfn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*(?:->\s*[^{;]*)?\{/g;
+    let out = "";
+    let cursor = 0;
+    let m;
+    while (m = header.exec(text)) {
+      const open = m.index + m[0].length - 1;
+      let depth = 0;
+      let end = -1;
+      for (let j = open; j < text.length; j++) {
+        if (text[j] === "{") depth++;
+        else if (text[j] === "}") {
+          depth--;
+          if (depth === 0) {
+            end = j;
+            break;
+          }
+        }
+      }
+      if (end === -1) break;
+      header.lastIndex = end + 1;
+      const body = text.slice(open + 1, end);
+      const params = splitTopLevel(m[2]).map((param) => param.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*:\s*(.+)$/)).filter(Boolean);
+      const decls = [];
+      const rewritten = params.map((param) => {
+        const name = param[1];
+        const type = param[2].trim();
+        if (paramIsMutated(body, name)) {
+          decls.push(`var ${name}: ${type} = ${name}_in;`);
+          return `${name}_in: ${type}`;
+        }
+        return `${name}: ${type}`;
+      });
+      if (decls.length > 0) {
+        const fixedHeader = m[0].replace(m[2], rewritten.join(", "));
+        out += text.slice(cursor, m.index) + fixedHeader + "\n" + decls.join("\n") + "\n" + body;
+        cursor = end;
+      } else {
+        out += text.slice(cursor, end);
+        cursor = end;
+      }
+    }
+    out += text.slice(cursor);
+    return out;
+  }
   function translateGlslStatements(glsl, { samplers = {}, uniformNames = [] } = {}) {
     let text = glsl;
     text = text.replace(/^\s*#version.*$/gm, "");
@@ -1285,44 +1418,6 @@ var HydraEffects = (() => {
     text = text.replace(/\bmat([234])\s*\(/g, (_, n) => `mat${n}x${n}f(`);
     text = text.replace(/\bfloat\s*\(/g, "f32(");
     text = text.replace(/\bint\s*\(/g, "i32(");
-    {
-      let out = "";
-      let i = 0;
-      for (; ; ) {
-        const m = /\b(?:min|max|clamp)\s*\(/.exec(text.slice(i));
-        if (!m) {
-          out += text.slice(i);
-          break;
-        }
-        const start = i + m.index;
-        out += text.slice(i, start);
-        const open = start + m[0].length - 1;
-        let depth = 0;
-        let end = -1;
-        for (let j = open; j < text.length; j++) {
-          if (text[j] === "(") depth++;
-          else if (text[j] === ")") {
-            depth--;
-            if (depth === 0) {
-              end = j;
-              break;
-            }
-          }
-        }
-        if (end === -1) throw new Error("unbalanced min/max/clamp( in GLSL source");
-        const args = splitTopLevel(text.slice(open + 1, end));
-        const scalar = /^[+-]?(?:\d+\.?\d*|\.\d+)$/;
-        const arity = args.map((arg) => arg.match(/\bvec([234])f\s*\(/)?.[1] || arg.match(/\.([xyzwrgba]{2,4})\b/)?.[1].length).find(Boolean);
-        if (arity && (args.length === 2 || args.length === 3)) {
-          for (let n = 0; n < args.length; n++) {
-            if (scalar.test(args[n])) args[n] = `vec${arity}f(${args[n]})`;
-          }
-        }
-        out += `${m[0]}${args.join(", ")})`;
-        i = end + 1;
-      }
-      text = out;
-    }
     text = text.replace(/\bfragColor\s*=/g, "return ");
     text = text.replace(
       new RegExp(`\\b(float|int|vec[234]|mat[234])\\s+(${IDENT})\\s*=`, "g"),
@@ -1334,6 +1429,7 @@ var HydraEffects = (() => {
     );
     text = text.replace(new RegExp(`(${IDENT})\\s*\\+\\+`, "g"), "$1 = $1 + 1");
     text = text.replace(new RegExp(`(${IDENT})\\s*--`, "g"), "$1 = $1 - 1");
+    text = splatScalarOverloads(text);
     if (/%/.test(text)) throw new Error("GLSL '%' has no WGSL float equivalent and is not in the port's corpus");
     const globalUniformNames = ["time", "resolution", ...uniformNames];
     for (const name of globalUniformNames) {
@@ -1410,6 +1506,7 @@ ${members}
     text = text.replace(/\bfn main\(/, "@fragment\nfn fs_main(in: VertexOutput) -> @location(0) vec4f");
     text = text.replace(/gl_FragCoord\.x/g, "in.position.x");
     text = text.replace(/gl_FragCoord\.y/g, "in.position.y");
+    text = fixMutatedFnParams(text);
     for (const name of uniformNames || []) {
       if (new RegExp(`(?<!params\\.)\\b${name}\\b`).test(text)) {
         throw new Error(`fused WGSL translation left a bare dynamic uniform reference: ${name}`);
@@ -1443,11 +1540,18 @@ ${text}`;
       combine: [["_c0", "vec4f"], ["_c1", "vec4f"]],
       combineCoord: [["_st", "vec2f"], ["_c0", "vec4f"]]
     }[type];
+    const candidateParams = [
+      ...leading,
+      ...wrapperInputs.map((i) => [i.name, glslTypeToWgsl(i.type)])
+    ];
+    const mutated = candidateParams.filter(([arg]) => paramIsMutated(translated, arg));
+    const paramToken = ([arg, t]) => mutated.some(([m]) => m === arg) ? `${arg}_in: ${t}` : `${arg}: ${t}`;
     const fnName = `_hydra_${name}`;
-    const params = leading.map(([arg, t]) => `${arg}: ${t}`);
-    const extraParams = wrapperInputs.map((i) => `${i.name}: ${glslTypeToWgsl(i.type)}`);
+    const params = leading.map(paramToken);
+    const extraParams = wrapperInputs.map((i) => paramToken([i.name, glslTypeToWgsl(i.type)]));
+    const copies = mutated.map(([arg, t]) => `var ${arg}: ${t} = ${arg}_in;`);
     const wrapper = `fn ${fnName}(${[...params, ...extraParams].join(", ")}) -> ${ret} {
-${translated}
+${copies.length > 0 ? copies.join("\n") + "\n" : ""}${translated}
 }`;
     const sample = (tex, coord) => `textureSample(${tex}, ${samplers[tex]}, ${coord})`;
     let main;
