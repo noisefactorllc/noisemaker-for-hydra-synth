@@ -62,7 +62,18 @@ function valueLiteral(value, input, temp, bindings, bindingTypes) {
   const type = input.type
   if (value && typeof value === 'object' &&
       ['Oscillator', 'Midi', 'Audio'].includes(value.type || value._ast?.type)) {
-    const uniform = `_hydra_${temp}_${input.name}`
+    // Dynamic uniform names must stay packable by the engine's WGSL byte
+    // layout parser (parseWgslStructByteLayout): it treats Params members
+    // whose name starts with `_` or `pad` (case-insensitive) as struct
+    // padding and never packs them, so a `_`-prefixed dynamic uniform would
+    // silently read 0 on the WebGPU backend (measured:
+    // rotate_animated_uniform_parameter rendered without its animated angle,
+    // maxDelta 230). `hydra_<temp>_<input>` keeps the temp-qualified
+    // uniqueness of the per-chain uniform name without the leading
+    // underscore; the same key is used in the GLSL declaration, the WGSL
+    // Params member, and the pass uniform dict, so name-based packing
+    // resolves it on every backend.
+    const uniform = `hydra_${temp}_${input.name}`
     bindings[uniform] = {
       value,
       min: input.min ?? 0,

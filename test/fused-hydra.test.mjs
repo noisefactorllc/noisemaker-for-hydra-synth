@@ -372,9 +372,9 @@ test('binds animated parameters into a fused shader without sampling passes', ()
   const result = buildHydraShaderOverrides(compiled)
   const shader = result.shaderOverrides[1].rotate.glsl
 
-  assert.match(shader, /uniform float _hydra_1_angle;/)
-  assert.match(shader, /_hydra_rotate\(_st, _hydra_1_angle, 0\.0\)/)
-  assert.deepEqual(result.uniformBindings[1]._hydra_1_angle, {
+  assert.match(shader, /uniform float hydra_1_angle;/)
+  assert.match(shader, /_hydra_rotate\(_st, hydra_1_angle, 0\.0\)/)
+  assert.deepEqual(result.uniformBindings[1].hydra_1_angle, {
     value: oscillator,
     min: 0,
     max: 100
@@ -405,9 +405,9 @@ test('binds dynamic Audio parameters into a fused shader without sampling passes
   const result = buildHydraShaderOverrides(compiled)
   const shader = result.shaderOverrides[1].rotate.glsl
 
-  assert.match(shader, /uniform float _hydra_1_angle;/)
-  assert.match(shader, /_hydra_rotate\(_st, _hydra_1_angle, 0\.0\)/)
-  assert.deepEqual(result.uniformBindings[1]._hydra_1_angle, {
+  assert.match(shader, /uniform float hydra_1_angle;/)
+  assert.match(shader, /_hydra_rotate\(_st, hydra_1_angle, 0\.0\)/)
+  assert.deepEqual(result.uniformBindings[1].hydra_1_angle, {
     value: audio,
     min: 0,
     max: 100
@@ -438,9 +438,9 @@ test('binds dynamic Midi parameters into a fused shader without sampling passes'
   const result = buildHydraShaderOverrides(compiled)
   const shader = result.shaderOverrides[1].rotate.glsl
 
-  assert.match(shader, /uniform float _hydra_1_angle;/)
-  assert.match(shader, /_hydra_rotate\(_st, _hydra_1_angle, 0\.0\)/)
-  assert.deepEqual(result.uniformBindings[1]._hydra_1_angle, {
+  assert.match(shader, /uniform float hydra_1_angle;/)
+  assert.match(shader, /_hydra_rotate\(_st, hydra_1_angle, 0\.0\)/)
+  assert.deepEqual(result.uniformBindings[1].hydra_1_angle, {
     value: midi,
     min: 0,
     max: 100
@@ -590,11 +590,11 @@ test('installs Hydra overrides and restores native Noisemaker surface precision'
   assert.ok(renderer.calls[0][1].shaderOverrides[1].brightness)
   assert.equal(renderer.pipeline.backend.textures.get('global_o0_read').format, 'rgba8')
   assert.equal(
-    renderer.pipeline.graph.passes[0].uniforms._hydra_1_amount,
+    renderer.pipeline.graph.passes[0].uniforms.hydra_1_amount,
     oscillator
   )
   assert.deepEqual(
-    renderer.pipeline.graph.passes[0].uniformSpecs._hydra_1_amount,
+    renderer.pipeline.graph.passes[0].uniformSpecs.hydra_1_amount,
     { min: 0, max: 100 }
   )
 

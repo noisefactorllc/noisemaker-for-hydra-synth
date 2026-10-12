@@ -238,12 +238,12 @@ precision highp float;
 uniform vec2 resolution;
 uniform float time;
 uniform sampler2D prevBuffer;
-uniform float _hydra_t0_speed;
+uniform float hydra_t0_speed;
 
 out vec4 fragColor;
 
 vec4 _hydra_gradient(vec2 _st) {
-   return vec4(_st, sin(_hydra_t0_speed*0.0), 1.0);
+   return vec4(_st, sin(hydra_t0_speed*0.0), 1.0);
 }
 vec4 _hydra_posterize(vec4 _c0, float bins, float gamma) {
    return floor(_c0 * 5.0) / 5.0 + floor(0.7);
@@ -259,16 +259,16 @@ void main() {
 `
   const wgsl = translateFusedProgram(fused, {
     textureInputs: ['inputTex', 'prevBuffer'],
-    uniformNames: ['_hydra_t0_speed']
+    uniformNames: ['hydra_t0_speed']
   })
   lintWgsl(wgsl, 'fused-sample')
   assert.match(wgsl, /@group\(0\) @binding\(0\) var inputTex: texture_2d<f32>;/)
   assert.match(wgsl, /@group\(0\) @binding\(2\) var prevBuffer: texture_2d<f32>;/)
   assert.match(wgsl, /@group\(0\) @binding\(4\) var<uniform> params: Params;/)
-  assert.match(wgsl, /_hydra_t0_speed: f32,/)
-  assert.match(wgsl, /params\._hydra_t0_speed/)
+  assert.match(wgsl, /hydra_t0_speed: f32,/)
+  assert.match(wgsl, /params\.hydra_t0_speed/)
   const fsMain = wgsl.slice(wgsl.indexOf('fn fs_main'))
-  assert.doesNotMatch(fsMain, /(?<!params\.)\b_hydra_t0_speed\b/)
+  assert.doesNotMatch(fsMain, /(?<!params\.)\bhydra_t0_speed\b/)
   // The engine flips internal WebGPU textures during presentation, so the
   // GLSL logical-coordinate flip must survive translation.
   assert.match(wgsl, /var _st: vec2f = vec2f\(in\.position\.x, params\.resolution\.y - in\.position\.y\) \/ params\.resolution\.xy;/)
@@ -395,4 +395,31 @@ fn _noise(v: vec3f) -> f32 {
   assert.equal(occurrences, 3, 'identical duplicates collapse to one; the differing body stays')
   assert.match(wgsl, /return v\.x \+ v\.y \+ v\.z;/)
   assert.match(wgsl, /return v\.x \* 2\.0;/)
+})
+
+test('fused translation rejects dynamic uniform names the engine cannot pack', () => {
+  // The engine's WGSL byte-layout parser (parseWgslStructByteLayout) treats
+  // Params members whose name starts with `_` or `pad` (case-insensitive) as
+  // struct padding and never packs them — an underscore-prefixed dynamic
+  // uniform would silently read 0 on the WebGPU backend (this exact defect
+  // rendered rotate_animated_uniform_parameter without its animated angle,
+  // maxDelta 230). The fused translation must fail loud on such names rather
+  // than emit a Params member the packer skips.
+  const fused = `void main() {
+  vec2 _st = vec2(gl_FragCoord.x, resolution.y - gl_FragCoord.y) / resolution.xy;
+  fragColor = vec4(_st, 0.0, 1.0);
+}
+`
+  for (const name of ['_hydra_1_angle', 'PAD_scale', 'padCount']) {
+    assert.throws(() => translateFusedProgram(fused, {
+      textureInputs: ['inputTex', 'prevBuffer'],
+      uniformNames: [name]
+    }), /parseWgslStructByteLayout/, name)
+  }
+  // Packable names pass: no leading underscore, no `pad` prefix.
+  const wgsl = translateFusedProgram(fused, {
+    textureInputs: ['inputTex', 'prevBuffer'],
+    uniformNames: ['hydra_1_angle', 'x_padding_ok']
+  })
+  assert.match(wgsl, /hydra_1_angle: f32,/)
 })

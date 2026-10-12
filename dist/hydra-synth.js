@@ -1537,6 +1537,11 @@ ${members}
     return out.join("\n");
   }
   function translateFusedProgram(fusedGlsl, { textureInputs, uniformNames }) {
+    for (const name of uniformNames || []) {
+      if (/^(?:_|pad)/i.test(name)) {
+        throw new Error(`fused WGSL translation: dynamic uniform '${name}' would be unpacked as struct padding by the engine's parseWgslStructByteLayout`);
+      }
+    }
     const uniforms = [];
     for (const name of uniformNames || []) {
       uniforms.push({ name, wgsl: "f32" });
@@ -1967,7 +1972,7 @@ ${tmpl.body(fnName, callArgs, sampler1, sampler2)}
   function valueLiteral(value, input, temp, bindings, bindingTypes) {
     const type = input.type;
     if (value && typeof value === "object" && ["Oscillator", "Midi", "Audio"].includes(value.type || value._ast?.type)) {
-      const uniform = `_hydra_${temp}_${input.name}`;
+      const uniform = `hydra_${temp}_${input.name}`;
       bindings[uniform] = {
         value,
         min: input.min ?? 0,

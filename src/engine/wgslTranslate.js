@@ -375,7 +375,7 @@ export function translateGlslStatements(glsl, { samplers = {}, uniformNames = []
   if (/%/.test(text)) throw new Error("GLSL '%' has no WGSL float equivalent and is not in the port's corpus")
   // Global uniforms become Params members. Fused programs additionally
   // declare their dynamic per-chain uniforms (e.g. oscillator references
-  // `_hydra_<temp>_<input>`); callers pass those names so their bare GLSL
+  // `hydra_<temp>_<input>`); callers pass those names so their bare GLSL
   // identifiers are rewritten to Params members too.
   const globalUniformNames = ['time', 'resolution', ...uniformNames]
   for (const name of globalUniformNames) {
@@ -516,6 +516,17 @@ export function dedupeRepeatedFunctions(text) {
 }
 
 export function translateFusedProgram(fusedGlsl, { textureInputs, uniformNames }) {
+  // Fail loud on dynamic uniform names the engine's WGSL byte-layout parser
+  // cannot pack: parseWgslStructByteLayout skips Params members whose name
+  // starts with `_` or `pad` (case-insensitive) as padding, so such a uniform
+  // would silently read 0 on the WebGPU backend. The plan generator keeps
+  // dynamic names packable (fuseHydraPlan valueLiteral); this guard pins the
+  // contract at the translation boundary too.
+  for (const name of uniformNames || []) {
+    if (/^(?:_|pad)/i.test(name)) {
+      throw new Error(`fused WGSL translation: dynamic uniform '${name}' would be unpacked as struct padding by the engine's parseWgslStructByteLayout`)
+    }
+  }
   const uniforms = []
   for (const name of uniformNames || []) {
     uniforms.push({ name, wgsl: 'f32' })
@@ -545,10 +556,11 @@ export function translateFusedProgram(fusedGlsl, { textureInputs, uniformNames }
   // (see dedupeRepeatedFunctions above); WGSL rejects the redeclarations.
   text = dedupeRepeatedFunctions(text)
   // Self-check: every dynamic uniform reference must have been rewritten to
-  // a Params member. A bare `_hydra_*` uniform identifier would be an
-  // undeclared identifier in WGSL (the engine compiles per program, so a
-  // broken source would only fail at render time on the far side of a
-  // review). Node wrapper names (_hydra_gradient etc.) are legitimate.
+  // a Params member. A bare dynamic uniform identifier (hydra_<temp>_<input>)
+  // would be an undeclared identifier in WGSL (the engine compiles per
+  // program, so a broken source would only fail at render time on the far
+  // side of a review). Node wrapper names (_hydra_gradient etc.) are
+  // legitimate.
   for (const name of uniformNames || []) {
     if (new RegExp(`(?<!params\\.)\\b${name}\\b`).test(text)) {
       throw new Error(`fused WGSL translation left a bare dynamic uniform reference: ${name}`)
