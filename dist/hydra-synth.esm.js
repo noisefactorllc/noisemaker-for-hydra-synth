@@ -1461,6 +1461,51 @@ ${members}
   }
   return { bindings: lines.join("\n"), struct, uniformBindingIndex: uniforms.length > 0 ? binding - 1 : null, samplers };
 }
+function dedupeRepeatedFunctions(text) {
+  const lines = text.split("\n");
+  const out = [];
+  const seen = /* @__PURE__ */ new Map();
+  for (let i = 0; i < lines.length; ) {
+    const line = lines[i];
+    const match = /^\s*fn\s+([A-Za-z_]\w*)/.exec(line);
+    if (!match) {
+      out.push(line);
+      i++;
+      continue;
+    }
+    let depth = 0;
+    let started = false;
+    let j = i;
+    for (; j < lines.length; j++) {
+      for (const ch of lines[j]) {
+        if (ch === "{") {
+          depth++;
+          started = true;
+        } else if (ch === "}") depth--;
+      }
+      if (started && depth <= 0) break;
+    }
+    if (!started || depth !== 0) {
+      out.push(line);
+      i++;
+      continue;
+    }
+    const block = lines.slice(i, j + 1).join("\n");
+    const normalized = lines.slice(i, j + 1).map((l) => l.replace(/^\s+/, "")).join("\n");
+    const name = match[1];
+    if (seen.has(name)) {
+      if (seen.get(name) === normalized) {
+        i = j + 1;
+        continue;
+      }
+    } else {
+      seen.set(name, normalized);
+    }
+    out.push(block);
+    i = j + 1;
+  }
+  return out.join("\n");
+}
 function translateFusedProgram(fusedGlsl, { textureInputs, uniformNames }) {
   const uniforms = [];
   for (const name of uniformNames || []) {
@@ -1477,12 +1522,13 @@ function translateFusedProgram(fusedGlsl, { textureInputs, uniformNames }) {
   text = text.replace(/gl_FragCoord\.x/g, "in.position.x");
   text = text.replace(/gl_FragCoord\.y/g, "in.position.y");
   text = fixMutatedFnParams(text);
+  text = dedupeRepeatedFunctions(text);
   for (const name of uniformNames || []) {
     if (new RegExp(`(?<!params\\.)\\b${name}\\b`).test(text)) {
       throw new Error(`fused WGSL translation left a bare dynamic uniform reference: ${name}`);
     }
   }
-  return `${bindings}
+  return dedupeRepeatedFunctions(`${bindings}
 
 ${struct}
 
@@ -1492,7 +1538,7 @@ ${UTILITY_WGSL}
 
 ${VERTEX_STAGE}
 
-${text}`;
+${text}`);
 }
 function buildEffectWgsl({ name, type, glsl: body, wrapperInputs, passInputs }) {
   const uniforms = [
@@ -1555,7 +1601,7 @@ ${copies.length > 0 ? copies.join("\n") + "\n" : ""}${translated}
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
   ${main}
 }`;
-  return `${bindings}
+  return dedupeRepeatedFunctions(`${bindings}
 
 ${struct}
 
@@ -1566,7 +1612,7 @@ ${UTILITY_WGSL}
 ${VERTEX_STAGE}
 
 ${wrapper}
-${mainFn}`;
+${mainFn}`);
 }
 
 // src/engine/portHydraEffects.js

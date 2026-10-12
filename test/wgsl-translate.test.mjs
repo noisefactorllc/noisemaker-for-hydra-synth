@@ -361,3 +361,38 @@ test('buildProgramInterface assigns dense pair bindings and reports samplers', (
   assert.ok(!bindings.includes('hydra_mod'))
   assert.ok(Object.keys(utilityGlsl).length > 0)
 })
+
+test('fused program dedupes Hydra per-body inlined utility helpers', () => {
+  // Hydra's GLSL generator inlines the utility helpers into every standalone
+  // effect body; a fused chain concatenates those bodies, so a chain with
+  // several noise-family effects declares _noise (and its permute/
+  // taylorInvSqrt helpers) once per body. WGSL forbids redeclaration — the
+  // fused translation must drop byte-identical repeated blocks and keep
+  // same-name blocks that differ (failing loudly at compile time instead of
+  // silently picking one).
+  const fused = `void main() {
+  vec2 _st = vec2(gl_FragCoord.x, resolution.y - gl_FragCoord.y) / resolution.xy;
+  fragColor = vec4(_st, 0.0, 1.0);
+}
+fn _noise(v: vec3f) -> f32 {
+  return v.x + v.y + v.z;
+}
+fn _noise(v: vec3f) -> f32 {
+  return v.x + v.y + v.z;
+}
+fn _noise(v: vec3f) -> f32 {
+  return v.x * 2.0;
+}
+`
+  const wgsl = translateFusedProgram(fused, {
+    textureInputs: ['inputTex', 'prevBuffer'],
+    uniformNames: []
+  })
+  lintWgsl(wgsl, 'fused-dedupe')
+  const occurrences = wgsl.split('fn _noise(v: vec3f) -> f32 {').length - 1
+  // The assembled program also carries the translated utility prelude's own
+  // _noise, so 3 total: 1 utility + 1 surviving body block + 1 differing.
+  assert.equal(occurrences, 3, 'identical duplicates collapse to one; the differing body stays')
+  assert.match(wgsl, /return v\.x \+ v\.y \+ v\.z;/)
+  assert.match(wgsl, /return v\.x \* 2\.0;/)
+})

@@ -461,6 +461,60 @@ export function wgslTypeForUniformValue(value, name) {
 // The Params struct therefore only needs to name the members the program
 // reads — unknown merged uniforms (e.g. wrapper inputs that the fused
 // program inlined as literals) are skipped by the engine.
+// WGSL forbids redeclaring a function name. Hydra's GLSL generator inlines
+// the utility helpers into every standalone effect body, and the fused GLSL
+// concatenates those bodies verbatim — a chain with several noise-family
+// effects declares _noise/permute/taylorInvSqrt once per body. ANGLE
+// tolerates the GLSL duplicates; Tint rejects them. Drop each top-level
+// function block whose text is identical to an earlier block of the same
+// name, comparing with per-line leading whitespace stripped (the inlined
+// copies carry the generating template's indentation). Same-name blocks
+// that differ beyond indentation are left in place: the compiler then
+// fails loudly instead of silently picking one.
+export function dedupeRepeatedFunctions(text) {
+  const lines = text.split('\n')
+  const out = []
+  const seen = new Map()
+  for (let i = 0; i < lines.length;) {
+    const line = lines[i]
+    const match = /^\s*fn\s+([A-Za-z_]\w*)/.exec(line)
+    if (!match) {
+      out.push(line)
+      i++
+      continue
+    }
+    let depth = 0
+    let started = false
+    let j = i
+    for (; j < lines.length; j++) {
+      for (const ch of lines[j]) {
+        if (ch === '{') { depth++; started = true } else if (ch === '}') depth--
+      }
+      if (started && depth <= 0) break
+    }
+    if (!started || depth !== 0) {
+      out.push(line)
+      i++
+      continue
+    }
+    const block = lines.slice(i, j + 1).join('\n')
+    const normalized = lines.slice(i, j + 1).map(l => l.replace(/^\s+/, '')).join('\n')
+    const name = match[1]
+    if (seen.has(name)) {
+      if (seen.get(name) === normalized) {
+        // exact duplicate modulo indentation: drop it
+        i = j + 1
+        continue
+      }
+    } else {
+      seen.set(name, normalized)
+    }
+    out.push(block)
+    i = j + 1
+  }
+  return out.join('\n')
+}
+
 export function translateFusedProgram(fusedGlsl, { textureInputs, uniformNames }) {
   const uniforms = []
   for (const name of uniformNames || []) {
@@ -487,6 +541,9 @@ export function translateFusedProgram(fusedGlsl, { textureInputs, uniformNames }
   // `_st.x += ...`). Rename each mutated parameter and inject the local
   // mutable copy its body expects.
   text = fixMutatedFnParams(text)
+  // Hydra's per-body inlined utility helpers repeat across a fused chain
+  // (see dedupeRepeatedFunctions above); WGSL rejects the redeclarations.
+  text = dedupeRepeatedFunctions(text)
   // Self-check: every dynamic uniform reference must have been rewritten to
   // a Params member. A bare `_hydra_*` uniform identifier would be an
   // undeclared identifier in WGSL (the engine compiles per program, so a
@@ -499,8 +556,11 @@ export function translateFusedProgram(fusedGlsl, { textureInputs, uniformNames }
   }
   // The translator stripped the GLSL uniform declarations; inject the
   // bindings, Params struct, helpers, utility functions, and vertex stage
-  // before the code.
-  return `${bindings}\n\n${struct}\n\n${HELPERS}\n\n${UTILITY_WGSL}\n\n${VERTEX_STAGE}\n\n${text}`
+  // before the code. The utility prelude and the bodies' inlined copies of
+  // the same helpers must be deduped over the ASSEMBLED text: the prelude is
+  // concatenated after the body dedupe, so deduping only the body would
+  // still leave the prelude/body pair.
+  return dedupeRepeatedFunctions(`${bindings}\n\n${struct}\n\n${HELPERS}\n\n${UTILITY_WGSL}\n\n${VERTEX_STAGE}\n\n${text}`)
 }
 
 // Full WGSL program for a single (non-fused) Hydra effect definition,
@@ -561,5 +621,7 @@ export function buildEffectWgsl({ name, type, glsl: body, wrapperInputs, passInp
 fn fs_main(in: VertexOutput) -> @location(0) vec4f {
   ${main}
 }`
-  return `${bindings}\n\n${struct}\n\n${HELPERS}\n\n${UTILITY_WGSL}\n\n${VERTEX_STAGE}\n\n${wrapper}\n${mainFn}`
+  // Same assembled-text dedupe as the fused path: the registered body may
+  // carry Hydra's inlined utility helpers, colliding with the prelude.
+  return dedupeRepeatedFunctions(`${bindings}\n\n${struct}\n\n${HELPERS}\n\n${UTILITY_WGSL}\n\n${VERTEX_STAGE}\n\n${wrapper}\n${mainFn}`)
 }
