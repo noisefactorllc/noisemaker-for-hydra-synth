@@ -114,7 +114,7 @@ function runChromeDump(url) {
   // host can legitimately exceed one dump window; the retry is a launch
   // retry, never a parity retry — a real mismatch still fails. Dump window
   // is env-tunable (HOST-DELEGATED runs use a larger window within the
-  // broker's cap).
+  // GPU host's cap).
   const scratchRoot = process.env.HOST_SCRATCH || tmpdir()
   mkdirSync(scratchRoot, { recursive: true })
   const tmp = mkdtempSync(join(scratchRoot, 'hydra-test-'))
