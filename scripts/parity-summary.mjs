@@ -7,7 +7,12 @@
  * gate uses) and counts every case from the page's independent per-case
  * line accounting. Given no arguments, the full authority is rendered at
  * both sweep sizes (64x64 and 96x48). Given case ids as arguments, only
- * those cases are counted (each at both sweep sizes). The last output line
+ * those cases are counted (each at both sweep sizes). A `--browser` option
+ * selects the browser target: `--browser chrome` (the default, dumped via
+ * scripts/chrome-dump.mjs) or `--browser firefox` (dumped via
+ * scripts/firefox-dump.mjs through the browser's Marionette server; the
+ * Firefox path comes from FIREFOX, and the dump needs a DISPLAY because
+ * Firefox WebGL2 requires a real display — run under Xvfb). The last output line
  * is the PARITY-SUMMARY JSON:
  *
  *   PARITY-SUMMARY {"expected":N,"executed":N,"exact":N,"strict":N,"near":N,"defer":N,"skip":N,"fail":N,"missing":N}
@@ -38,6 +43,10 @@ const CHROME = process.env.CHROME ||
   (process.platform === 'darwin'
     ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'
     : '/usr/bin/chromium')
+const FIREFOX = process.env.FIREFOX ||
+  (process.platform === 'darwin'
+    ? '/Applications/Firefox.app/Contents/MacOS/firefox'
+    : '/usr/bin/firefox')
 const PORT = process.env.PORT ? Number(process.env.PORT) : 0
 process.on('SIGINT', () => { cleanupScratchBundle(); process.exit(130) })
 process.on('SIGTERM', () => { cleanupScratchBundle(); process.exit(143) })
@@ -120,11 +129,67 @@ function runChromeDump(url, port) {
   }
 }
 
+function runFirefoxDump(url, port) {
+  // Standalone child (scripts/firefox-dump.mjs), same one-launch-retry
+  // pattern as the chrome dump; the retry is a launch retry, never a
+  // parity retry. Needs DISPLAY (headed Firefox under Xvfb for WebGL2).
+  const tmp = mkdtempSync(join(tmpdir(), 'parity-summary-fxdump-'))
+  const out = join(tmp, 'dom.html')
+  const dumpTimeout = 900000
+  const childArgs = [join(process.cwd(), 'scripts', 'firefox-dump.mjs'), FIREFOX, `http://localhost:${port}${url}`, String(dumpTimeout), out]
+  const childOpts = { encoding: 'utf8', timeout: dumpTimeout + 120000, killSignal: 'SIGKILL' }
+  try {
+    let result = spawnSync(process.execPath, childArgs, childOpts)
+    const childFailed = r => r.status !== 0 || (r.stderr || '').toString().trim() !== '' || r.error
+    if (childFailed(result)) {
+      console.log('[parity-summary] firefox dump timed out or crashed; retrying once (launch retry)')
+      result = spawnSync(process.execPath, childArgs, childOpts)
+    }
+    if (childFailed(result)) {
+      throw new Error(`firefox dump failed (exit=${result.status}): ${((result.stderr || '') || (result.error && result.error.message) || '').toString().trim().slice(0, 300)}`)
+    }
+    const dom = readFileSync(out, 'utf8')
+    if (!dom) throw new Error('firefox exited with no DOM output (timeout or crash)')
+    return dom
+  } finally {
+    rmSync(tmp, { recursive: true, force: true })
+  }
+}
+
+function runDump(browser, url, port) {
+  return browser === 'firefox' ? runFirefoxDump(url, port) : runChromeDump(url, port)
+}
+
 let server
 let addedUpstream = false
+// Browser target: --browser chrome (default) or --browser firefox; any other
+// argument is a case id. Kept separate from the id list so the id contract
+// ([a-zA-Z0-9_]) and the accounting below stay unchanged per target.
+const BROWSERS = ['chrome', 'firefox']
+function parseBrowserTarget(argv) {
+  let browser = 'chrome'
+  const ids = []
+  for (let i = 0; i < argv.length; i++) {
+    const arg = argv[i]
+    if (arg === '--browser') {
+      browser = argv[++i]
+      if (browser === undefined) throw new Error('--browser needs a value (chrome or firefox)')
+      continue
+    }
+    if (arg.startsWith('--browser=')) {
+      browser = arg.slice('--browser='.length)
+      continue
+    }
+    ids.push(arg)
+  }
+  if (!BROWSERS.includes(browser)) {
+    throw new Error(`unknown browser target '${browser}' (supported: ${BROWSERS.join(', ')})`)
+  }
+  return { browser, ids }
+}
 async function main() {
 try {
-  const requestedIds = process.argv.slice(2)
+  const { browser, ids: requestedIds } = parseBrowserTarget(process.argv.slice(2))
   if (requestedIds.length > 0 && /[^a-zA-Z0-9_]/.test(requestedIds.join(''))) {
     throw new Error('case ids must match [a-zA-Z0-9_]')
   }
@@ -175,7 +240,7 @@ try {
     : SWEEP_URLS
   for (const sweepUrl of urls) {
     console.log(`[parity-summary] sweep: GET ${sweepUrl}`)
-    const dom = runChromeDump(sweepUrl, servingPort)
+    const dom = runDump(browser, sweepUrl, servingPort)
     const summary = parseSummary(dom)
     if (summary.ok === null) throw new Error('no summary line — the sweep did not report results')
     authorityTotals.push(summary.total)
