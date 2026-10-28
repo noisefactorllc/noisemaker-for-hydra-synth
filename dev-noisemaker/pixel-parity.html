@@ -38,6 +38,21 @@
       log.appendChild(div)
     }
 
+    // The observed renderer string identifies the GL implementation that
+    // produced the sweep's bytes, so the measurement can record it with the
+    // result. Same probe pattern as test/installed-workflow-page.mjs.
+    function glRendererString() {
+      try {
+        const gl = document.createElement('canvas').getContext('webgl2')
+        if (!gl) return 'unavailable'
+        const ext = gl.getExtension('WEBGL_debug_renderer_info')
+        const value = ext ? gl.getParameter(ext.UNMASKED_RENDERER_WEBGL) : gl.getParameter(gl.RENDERER)
+        return typeof value === 'string' && value !== '' ? value : 'unavailable'
+      } catch (_error) {
+        return 'unavailable'
+      }
+    }
+
     function dslLiteral(input) {
       const value = input.default
       if (input.type === 'vec4') {
@@ -665,6 +680,7 @@
         canvas.height = H
       }
       emit(`size ${W}x${H}`)
+      emit(`renderer ${glRendererString()}`)
       // Case-scoped rendering: a `cases` query parameter (comma-separated
       // names) limits the page to exactly those cases, so the parity-summary
       // entrypoint renders only the requested cases; the default (no

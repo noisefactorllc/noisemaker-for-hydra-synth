@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { evaluateSweep, parseSummary, TOTAL_CASES } from '../scripts/ci-gate.mjs'
+import { evaluateSweep, parseSummary, rendererFromDom, TOTAL_CASES } from '../scripts/ci-gate.mjs'
 import { deriveSweepCaseIds } from '../scripts/sweep-case-set.mjs'
 
 // Synthetic sweep-page DOMs in the exact protocol dev-noisemaker/pixel-parity.html
@@ -134,4 +134,35 @@ test('evaluateSweep without expectedIds: behavior is unchanged (no id-set reason
   const result = evaluateSweep(parsed, TOTAL)
   assert.equal(result.passed, true)
   assert.deepEqual(result.reasons, [])
+})
+
+// The sweep page also emits one `renderer <string>` line identifying the GL
+// implementation that produced the bytes (the measurement records the
+// observed renderer with the result). parseSummary must ignore it, and
+// rendererFromDom must extract it.
+
+test('parseSummary ignores the renderer line: counts are identical with and without it', () => {
+  const base = dom({ okCases: 3, failCases: 0, summaryOk: 3, summaryFail: 0, summaryTotal: 3 })
+  const withRenderer = base.replace(
+    '<div id="log">',
+    '<div id="log"><div>renderer ANGLE (Apple, ANGLE Metal Renderer: Apple M4, Unspecified Version)</div>'
+  )
+  assert.deepEqual(parseSummary(withRenderer), parseSummary(base))
+})
+
+test('rendererFromDom extracts the observed renderer string and returns null when absent', () => {
+  const withRenderer = dom({ okCases: 1, failCases: 0, summaryOk: 1, summaryFail: 0, summaryTotal: 1 }).replace(
+    '<div id="log">',
+    '<div id="log"><div>renderer ANGLE (Intel, Mesa Intel(R) UHD Graphics (CML GT2), OpenGL 4.6)</div>'
+  )
+  assert.equal(rendererFromDom(withRenderer), 'ANGLE (Intel, Mesa Intel(R) UHD Graphics (CML GT2), OpenGL 4.6)')
+  assert.equal(rendererFromDom(dom({ okCases: 1, failCases: 0, summaryOk: 1, summaryFail: 0, summaryTotal: 1 })), null)
+})
+
+test('rendererFromDom passes the unavailable value through so the parity entrypoint can fail closed on a missing line, not on a missing value', () => {
+  const withUnavailable = dom({ okCases: 1, failCases: 0, summaryOk: 1, summaryFail: 0, summaryTotal: 1 }).replace(
+    '<div id="log">',
+    '<div id="log"><div>renderer unavailable</div>'
+  )
+  assert.equal(rendererFromDom(withUnavailable), 'unavailable')
 })

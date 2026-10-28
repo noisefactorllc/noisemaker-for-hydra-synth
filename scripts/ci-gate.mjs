@@ -304,6 +304,18 @@ export function parseSummary(domText) {
   }
 }
 
+// The sweep page emits one `renderer <string>` line identifying the GL
+// implementation that produced the sweep's bytes. Extraction mirrors
+// parseSummary's log-div protocol; parseSummary deliberately ignores the
+// line so the case accounting stays unchanged.
+export function rendererFromDom(domText) {
+  const logMatch = domText.match(/<div id="log">([\s\S]*)<\/div>\s*<script/)
+  if (!logMatch) return null
+  const text = logMatch[1].replace(/<[^>]*>/g, '\n')
+  const match = text.match(/^renderer (.+)$/m)
+  return match ? match[1].trim() : null
+}
+
 let server
 async function main() {
 try {

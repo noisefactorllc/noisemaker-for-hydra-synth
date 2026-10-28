@@ -28,6 +28,10 @@
  *
  * Exit 0 only when executed == expected, fail == 0, and missing == 0.
  * Launch retries only, never parity retries; a real mismatch fails.
+ * The measurement records the observed renderer string with the result: the
+ * sweep page reports its GL implementation as one `renderer <string>` line,
+ * the tool prints it as `[parity-summary] renderer: <string>` immediately
+ * before the PARITY-SUMMARY line, and a sweep that omits that line fails.
  */
 import { spawn, spawnSync } from 'node:child_process'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
@@ -35,7 +39,7 @@ import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { parseSummary, TOTAL_CASES } from './ci-gate.mjs'
+import { parseSummary, rendererFromDom, TOTAL_CASES } from './ci-gate.mjs'
 import { classifyCaseIds, deriveSweepCaseIds } from './sweep-case-set.mjs'
 import { LEGACY_BUNDLE, cleanupScratchBundle, materializeLegacyBundle } from './upstream-bundle.mjs'
 
@@ -232,6 +236,9 @@ try {
   // denominator self-referential and re-allow silent case skips. A silent
   // skip shows up as executed < expected (missing > 0) and fails.
   const authorityTotals = []
+  // The measurement records the observed renderer string with the result:
+  // the sweep page reports the GL implementation that produced the bytes.
+  let observedRenderer = null
   // Case-scoped rendering: with ids, each sweep URL carries the page's
   // `cases` query parameter so the page renders ONLY the requested cases;
   // without ids the complete suite renders (the default, unchanged).
@@ -243,6 +250,11 @@ try {
     const dom = runDump(browser, sweepUrl, servingPort)
     const summary = parseSummary(dom)
     if (summary.ok === null) throw new Error('no summary line — the sweep did not report results')
+    const renderer = rendererFromDom(dom)
+    // Fail closed: the measurement must record the observed renderer with
+    // the result, so a sweep that omits the renderer line cannot pass.
+    if (!renderer) throw new Error('the sweep page did not report its renderer — the measurement must record the observed renderer with the result')
+    observedRenderer = renderer
     authorityTotals.push(summary.total)
     // Id-set accounting independent of the counts: the
     // reported ids in emission order (duplicates preserved) must be exactly
@@ -310,6 +322,7 @@ try {
     console.error(`[parity-summary] ID VIOLATION: ${violation}`)
   }
   console.log(`[parity-summary] ${passing ? 'GREEN' : 'FAIL'}: expected=${expected} executed=${executed} exact=${exact} fail=${fail} missing=${missing}${idViolations.length > 0 ? ` idViolations=${idViolations.length}` : ''}`)
+  if (observedRenderer) console.log(`[parity-summary] renderer: ${observedRenderer}`)
   console.log(summaryLine)
   process.exitCode = passing ? 0 : 1
 } catch (err) {
