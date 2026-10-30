@@ -149,6 +149,14 @@ jobs:
           mkdir -p "$RUNNER_TEMP/installed-workflow-receipts"
           { echo "platform=$(node -p process.platform)"; echo "chrome=$CHROME"; echo "node=$(node -v)"; } > "$RUNNER_TEMP/installed-workflow-receipts/identity.log"
           node --test test/installed-workflow.test.mjs 2>&1 | tee "$RUNNER_TEMP/installed-workflow-receipts/installed-workflow-windows.log"
+      - name: Run the full rendered parity sweep on Windows Chrome
+        shell: bash
+        run: |
+          {
+            git rev-parse HEAD
+            git ls-files -s scripts/parity-summary.mjs dev-noisemaker/pixel-parity.html
+          } | tee -a "$RUNNER_TEMP/installed-workflow-receipts/identity.log"
+          node scripts/parity-summary.mjs 2>&1 | tee "$RUNNER_TEMP/installed-workflow-receipts/parity-windows.log"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         if: always()
         with:
