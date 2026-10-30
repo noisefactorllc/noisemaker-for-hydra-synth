@@ -111,9 +111,42 @@ export function probeWebGLContexts() {
 
 export async function probeNativeEngine({ mode, basePath }) {
   const result = { mode, userAgent: navigator.userAgent }
-  let renderer, backend, canvas, probe
+  let renderer, backend, canvas, probe, legacy, legacyCanvas
   try {
-    const engine = await import(`${basePath}/noisemaker-shaders-core.esm.min.js`)
+    let engine = await import(`${basePath}/noisemaker-shaders-core.esm.min.js`)
+    if (mode.startsWith('legacy-')) {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script')
+        script.src = '/dev-noisemaker/.legacy-hydra-synth.js'
+        script.onload = resolve
+        script.onerror = () => reject(new Error('Legacy authority script failed to load'))
+        document.head.appendChild(script)
+      })
+      legacyCanvas = document.createElement('canvas')
+      legacyCanvas.width = legacyCanvas.height = 64
+      legacyCanvas.style.display = 'none'
+      document.body.appendChild(legacyCanvas)
+      window.__parityStage = 'legacy-create'
+      legacy = new window.Hydra({ canvas: legacyCanvas, width: 64, height: 64,
+        makeGlobal: false, autoLoop: false, detectAudio: false, enableStreamCapture: false, precision: 'highp' })
+      window.__parityStage = 'legacy-noise-render'
+      legacy.synth.time = 0
+      legacy.synth.noise(10, 0.1).out(legacy.o[0])
+      legacy.tick(0)
+      const gl = legacyCanvas.getContext('webgl')
+      gl.finish()
+      result.legacy = { lost: gl.isContextLost(), actual: gl.getContextAttributes(), error: gl.getError() }
+      if (mode === 'legacy-only') {
+        await new Promise(resolve => setTimeout(resolve, 100))
+        result.legacy.settledLost = gl.isContextLost()
+        return result
+      }
+    }
+    if (mode.startsWith('hydra-')) {
+      window.__parityStage = 'hydra-registration'
+      const port = await import('/src/index.js')
+      engine = await port.loadHydraEffects({ engine })
+    }
     if (mode.startsWith('probe-')) {
       probe = document.createElement('canvas')
       const context = probe.getContext('webgl2')
@@ -144,14 +177,24 @@ export async function probeNativeEngine({ mode, basePath }) {
       await new Promise(resolve => setTimeout(resolve, 100))
       result.after = { lost: gl.isContextLost(), actual: gl.getContextAttributes(), error: gl.getError() }
     } else {
-      renderer = new engine.CanvasRenderer({ canvas, width: 64, height: 64,
+      window.__parityStage = 'native-create'
+      if (mode.startsWith('hydra-osc')) canvas.height = 48
+      const dimensions = mode === 'hydra-osc-implicit' ? {} : { width: canvas.width, height: canvas.height }
+      result.dimensions = { canvas: [canvas.width, canvas.height], options: dimensions }
+      renderer = new engine.CanvasRenderer({ canvas, ...dimensions,
         basePath, bundlePath: `${basePath}/effects`, useBundles: true, preferWebGPU: false, autoStart: false })
       await renderer.loadManifest()
-      await renderer.loadEffects(['synth/solid'])
-      await renderer.compile('search synth\nsolid(color: #ff0000).write(o0)')
+      const source = mode === 'hydra-noise' ? 'search hydra\nnoise(scale: 10, offset: 0.1).write(o0)'
+        : mode.startsWith('hydra-osc') ? 'search hydra\nhydraOsc(frequency: 30, sync: 0.1, offset: 0.1).write(o0)'
+          : 'search synth\nsolid(color: #ff0000).write(o0)'
+      result.source = source
+      if (!mode.startsWith('hydra-')) await renderer.loadEffects(['synth/solid'])
+      window.__parityStage = 'native-compile'
+      await renderer.compile(source)
       renderer.pipeline.graph.renderSurface = 'o0'
       renderer.pipeline.globalUniforms.time = 0
-      renderer.pipeline.globalUniforms.resolution = [64, 64]
+      renderer.pipeline.globalUniforms.resolution = [canvas.width, canvas.height]
+      window.__parityStage = 'native-render'
       renderer.pipeline.render(0)
       const gl = renderer.pipeline.backend.gl
       gl.finish()
@@ -169,6 +212,8 @@ export async function probeNativeEngine({ mode, basePath }) {
     result.diagnostics = window.__parityDiagnostics || []
     try { await renderer?.dispose() } catch (error) { result.cleanupError = String(error) }
     try { backend?.destroy() } catch (error) { result.cleanupError = String(error) }
+    try { legacy?.regl?.destroy() } catch (error) { result.cleanupError = String(error) }
+    legacyCanvas?.remove()
     canvas?.remove()
     probe?.remove()
   }

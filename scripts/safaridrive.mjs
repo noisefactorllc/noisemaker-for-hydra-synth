@@ -92,7 +92,7 @@ async function retainFreshWebGLProbe() {
 }
 
 async function retainNativeEngineProbes() {
-  for (const mode of ['native-only', 'probe-retained', 'probe-lost-immediate', 'probe-lost-settled', 'mrt-only', 'backend-init']) {
+  for (const mode of ['native-only', 'probe-retained', 'probe-lost-immediate', 'probe-lost-settled', 'mrt-only', 'backend-init', 'hydra-noise', 'hydra-osc-explicit', 'hydra-osc-implicit', 'legacy-only', 'legacy-native']) {
     const session = await driverFetch('POST', '/session', {
       capabilities: { alwaysMatch: { browserName: 'safari' } }
     })
