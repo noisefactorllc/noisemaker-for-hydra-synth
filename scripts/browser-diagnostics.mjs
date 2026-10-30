@@ -112,6 +112,31 @@ export function probeWebGLContexts() {
 export async function probeNativeEngine({ mode, basePath }) {
   const result = { mode, userAgent: navigator.userAgent }
   let renderer, backend, canvas, probe, legacy, legacyCanvas
+  const readback2d = (source, gl) => {
+    const width = source.width, height = source.height
+    const before = new Uint8Array(width * height * 4)
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, before)
+    const result = { beforeLost: gl.isContextLost(), beforeError: gl.getError(), beforePixel: Array.from(before.slice(0, 4)) }
+    const copy = document.createElement('canvas')
+    copy.width = width; copy.height = height
+    const context = copy.getContext('2d', { willReadFrequently: true })
+    context.drawImage(source, 0, 0)
+    result.afterDrawLost = gl.isContextLost()
+    const data = context.getImageData(0, 0, width, height).data
+    result.afterGetImageLost = gl.isContextLost()
+    const after = new Uint8Array(before.length)
+    gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, after)
+    result.afterError = gl.getError()
+    result.afterPixel = Array.from(after.slice(0, 4))
+    result.copiedBottomPixel = Array.from(data.slice((height - 1) * width * 4, (height - 1) * width * 4 + 4))
+    result.changedGLBytes = before.reduce((count, value, i) => count + (value !== after[i]), 0)
+    result.differingCopyBytes = before.reduce((count, value, i) => {
+      const row = Math.floor(i / (width * 4)), column = i % (width * 4)
+      return count + (value !== data[(height - row - 1) * width * 4 + column])
+    }, 0)
+    return result
+  }
   try {
     let engine = await import(`${basePath}/noisemaker-shaders-core.esm.min.js`)
     if (mode.startsWith('legacy-')) {
@@ -136,6 +161,10 @@ export async function probeNativeEngine({ mode, basePath }) {
       const gl = legacyCanvas.getContext('webgl')
       gl.finish()
       result.legacy = { lost: gl.isContextLost(), actual: gl.getContextAttributes(), error: gl.getError() }
+      if (mode === 'legacy-readback-native') {
+        window.__parityStage = 'legacy-2d-readback'
+        result.readback = readback2d(legacyCanvas, gl)
+      }
       if (mode === 'legacy-only') {
         await new Promise(resolve => setTimeout(resolve, 100))
         result.legacy.settledLost = gl.isContextLost()
@@ -203,6 +232,10 @@ export async function probeNativeEngine({ mode, basePath }) {
       gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel)
       result.pixel = Array.from(pixel)
       result.immediate = { lost: gl.isContextLost(), actual: gl.getContextAttributes(), error: gl.getError() }
+      if (mode === 'native-readback') {
+        window.__parityStage = 'native-2d-readback'
+        result.readback = readback2d(canvas, gl)
+      }
       await new Promise(resolve => setTimeout(resolve, 100))
       result.settledLost = gl.isContextLost()
     }
