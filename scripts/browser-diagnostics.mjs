@@ -112,7 +112,7 @@ export function probeWebGLContexts() {
 export async function probeNativeEngine({ mode, basePath }) {
   const result = { mode, userAgent: navigator.userAgent }
   let renderer, backend, canvas, probe, legacy, legacyCanvas
-  const readback2d = (source, gl) => {
+  const readback2d = (source, gl, willReadFrequently = true) => {
     const width = source.width, height = source.height
     const before = new Uint8Array(width * height * 4)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
@@ -120,7 +120,9 @@ export async function probeNativeEngine({ mode, basePath }) {
     const result = { beforeLost: gl.isContextLost(), beforeError: gl.getError(), beforePixel: Array.from(before.slice(0, 4)) }
     const copy = document.createElement('canvas')
     copy.width = width; copy.height = height
-    const context = copy.getContext('2d', { willReadFrequently: true })
+    const context = copy.getContext('2d', { willReadFrequently })
+    result.requested2d = { willReadFrequently }
+    result.actual2d = context.getContextAttributes?.()
     context.drawImage(source, 0, 0)
     result.afterDrawLost = gl.isContextLost()
     const data = context.getImageData(0, 0, width, height).data
@@ -161,9 +163,9 @@ export async function probeNativeEngine({ mode, basePath }) {
       const gl = legacyCanvas.getContext('webgl')
       gl.finish()
       result.legacy = { lost: gl.isContextLost(), actual: gl.getContextAttributes(), error: gl.getError() }
-      if (mode === 'legacy-readback-native') {
+      if (mode.startsWith('legacy-readback-native')) {
         window.__parityStage = 'legacy-2d-readback'
-        result.readback = readback2d(legacyCanvas, gl)
+        result.readback = readback2d(legacyCanvas, gl, !mode.endsWith('-gpu'))
       }
       if (mode === 'legacy-only') {
         await new Promise(resolve => setTimeout(resolve, 100))
@@ -232,9 +234,9 @@ export async function probeNativeEngine({ mode, basePath }) {
       gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel)
       result.pixel = Array.from(pixel)
       result.immediate = { lost: gl.isContextLost(), actual: gl.getContextAttributes(), error: gl.getError() }
-      if (mode === 'native-readback') {
+      if (mode.startsWith('native-readback')) {
         window.__parityStage = 'native-2d-readback'
-        result.readback = readback2d(canvas, gl)
+        result.readback = readback2d(canvas, gl, !mode.endsWith('-gpu'))
       }
       await new Promise(resolve => setTimeout(resolve, 100))
       result.settledLost = gl.isContextLost()
