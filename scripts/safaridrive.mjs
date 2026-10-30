@@ -99,6 +99,7 @@ async function retainNativeEngineProbes() {
     const sessionId = session.sessionId
     try {
       await driverFetch('POST', `/session/${sessionId}/timeouts`, { script: 120000 })
+      await driverFetch('POST', `/session/${sessionId}/url`, { url: `http://127.0.0.1:${PORT}/scripts/` })
       const result = await driverFetch('POST', `/session/${sessionId}/execute/async`, {
         script: `const done = arguments[arguments.length - 1];
           const describeBrowserError = ${String(describeBrowserError)};
