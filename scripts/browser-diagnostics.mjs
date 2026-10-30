@@ -108,3 +108,69 @@ export function probeWebGLContexts() {
   for (const canvas of canvases) canvas.remove()
   return { userAgent: navigator.userAgent, measurements }
 }
+
+export async function probeNativeEngine({ mode, basePath }) {
+  const result = { mode, userAgent: navigator.userAgent }
+  let renderer, backend, canvas, probe
+  try {
+    const engine = await import(`${basePath}/noisemaker-shaders-core.esm.min.js`)
+    if (mode.startsWith('probe-')) {
+      probe = document.createElement('canvas')
+      const context = probe.getContext('webgl2')
+      result.probeCreated = Boolean(context)
+      if (!context) throw new Error('Probe context unavailable')
+      if (mode !== 'probe-retained') {
+        const lost = new Promise(resolve => probe.addEventListener('webglcontextlost', resolve, { once: true }))
+        context.getExtension('WEBGL_lose_context').loseContext()
+        if (mode === 'probe-lost-settled') {
+          await Promise.race([lost, new Promise((_, reject) => setTimeout(() => reject(new Error('Probe loss event timed out')), 5000))])
+        }
+      }
+    }
+    canvas = document.createElement('canvas')
+    canvas.width = canvas.height = 64
+    canvas.style.display = 'none'
+    document.body.appendChild(canvas)
+    if (mode === 'backend-init' || mode === 'mrt-only') {
+      const gl = canvas.getContext('webgl2', { preserveDrawingBuffer: true })
+      result.before = { lost: gl.isContextLost(), actual: gl.getContextAttributes() }
+      backend = new engine.WebGL2Backend(gl, canvas)
+      if (mode === 'mrt-only') {
+        result.floatExtension = Boolean(gl.getExtension('EXT_color_buffer_float'))
+        result.byteBudget = backend.probeColorBytesPerSample()
+      } else {
+        await backend.init()
+      }
+      await new Promise(resolve => setTimeout(resolve, 100))
+      result.after = { lost: gl.isContextLost(), actual: gl.getContextAttributes(), error: gl.getError() }
+    } else {
+      renderer = new engine.CanvasRenderer({ canvas, width: 64, height: 64,
+        basePath, bundlePath: `${basePath}/effects`, useBundles: true, preferWebGPU: false, autoStart: false })
+      await renderer.loadManifest()
+      await renderer.loadEffects(['synth/solid'])
+      await renderer.compile('search synth\nsolid(color: #ff0000).write(o0)')
+      renderer.pipeline.graph.renderSurface = 'o0'
+      renderer.pipeline.globalUniforms.time = 0
+      renderer.pipeline.globalUniforms.resolution = [64, 64]
+      renderer.pipeline.render(0)
+      const gl = renderer.pipeline.backend.gl
+      gl.finish()
+      const pixel = new Uint8Array(4)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null)
+      gl.readPixels(0, 0, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel)
+      result.pixel = Array.from(pixel)
+      result.immediate = { lost: gl.isContextLost(), actual: gl.getContextAttributes(), error: gl.getError() }
+      await new Promise(resolve => setTimeout(resolve, 100))
+      result.settledLost = gl.isContextLost()
+    }
+  } catch (error) {
+    result.exception = { name: error?.name, message: error?.message, stack: error?.stack }
+  } finally {
+    result.diagnostics = window.__parityDiagnostics || []
+    try { await renderer?.dispose() } catch (error) { result.cleanupError = String(error) }
+    try { backend?.destroy() } catch (error) { result.cleanupError = String(error) }
+    canvas?.remove()
+    probe?.remove()
+  }
+  return result
+}

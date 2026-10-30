@@ -21,7 +21,8 @@ import { join, resolve } from 'node:path'
 import { spawn, spawnSync, execFileSync } from 'node:child_process'
 import { materializeLegacyBundle, cleanupScratchBundle } from './upstream-bundle.mjs'
 import assert from 'node:assert/strict'
-import { probeWebGLContexts } from './browser-diagnostics.mjs'
+import { DEFAULT_CDN } from '../src/engine/index.js'
+import { probeWebGLContexts, probeNativeEngine, describeBrowserError, installBrowserDiagnostics } from './browser-diagnostics.mjs'
 import { BUNDLE_PAGE_BODY, MODULE_PAGE_BODY, encodeTestPng, pageHtml, parseSummary } from '../test/installed-workflow-page.mjs'
 
 const PORT = Number(process.env.HYDRA_SAFARI_PORT || 43125)
@@ -87,6 +88,30 @@ async function retainFreshWebGLProbe() {
     console.log(`[safari] fresh WebGL probe: ${JSON.stringify(result)}`)
   } finally {
     await driverFetch('DELETE', `/session/${sessionId}`).catch(() => {})
+  }
+}
+
+async function retainNativeEngineProbes() {
+  for (const mode of ['native-only', 'probe-retained', 'probe-lost-immediate', 'probe-lost-settled', 'mrt-only', 'backend-init']) {
+    const session = await driverFetch('POST', '/session', {
+      capabilities: { alwaysMatch: { browserName: 'safari' } }
+    })
+    const sessionId = session.sessionId
+    try {
+      await driverFetch('POST', `/session/${sessionId}/timeouts`, { script: 120000 })
+      const result = await driverFetch('POST', `/session/${sessionId}/execute/async`, {
+        script: `const done = arguments[arguments.length - 1];
+          const describeBrowserError = ${String(describeBrowserError)};
+          const installBrowserDiagnostics = ${String(installBrowserDiagnostics)};
+          installBrowserDiagnostics();
+          (${String(probeNativeEngine)})(arguments[0]).then(done, error => done({ error: String(error) }));`,
+        args: [{ mode, basePath: DEFAULT_CDN }]
+      })
+      writeFileSync(join(receipts, `${mode}-probe.json`), JSON.stringify(result, null, 2))
+      console.log(`[safari] ${mode} probe: ${JSON.stringify(result)}`)
+    } finally {
+      await driverFetch('DELETE', `/session/${sessionId}`).catch(() => {})
+    }
   }
 }
 
@@ -268,6 +293,7 @@ try {
     }, 30000, 'http-server')
 
     await retainFreshWebGLProbe()
+    await retainNativeEngineProbes()
 
     const session = await driverFetch('POST', '/session', {
       capabilities: { alwaysMatch: { browserName: 'safari' } }
