@@ -112,7 +112,7 @@ export function probeWebGLContexts() {
 export async function probeNativeEngine({ mode, basePath }) {
   const result = { mode, userAgent: navigator.userAgent }
   let renderer, backend, canvas, probe, legacy, legacyCanvas
-  const readback2d = (source, gl, willReadFrequently = true) => {
+  const readback2d = async (source, gl, willReadFrequently = true, snapshot = false) => {
     const width = source.width, height = source.height
     const before = new Uint8Array(width * height * 4)
     gl.bindFramebuffer(gl.FRAMEBUFFER, null)
@@ -123,7 +123,9 @@ export async function probeNativeEngine({ mode, basePath }) {
     const context = copy.getContext('2d', { willReadFrequently })
     result.requested2d = { willReadFrequently }
     result.actual2d = context.getContextAttributes?.()
-    context.drawImage(source, 0, 0)
+    result.snapshot = snapshot
+    const image = snapshot ? await createImageBitmap(source) : source
+    try { context.drawImage(image, 0, 0) } finally { if (snapshot) image.close() }
     result.afterDrawLost = gl.isContextLost()
     const data = context.getImageData(0, 0, width, height).data
     result.afterGetImageLost = gl.isContextLost()
@@ -165,7 +167,7 @@ export async function probeNativeEngine({ mode, basePath }) {
       result.legacy = { lost: gl.isContextLost(), actual: gl.getContextAttributes(), error: gl.getError() }
       if (mode.startsWith('legacy-readback-native')) {
         window.__parityStage = 'legacy-2d-readback'
-        result.readback = readback2d(legacyCanvas, gl, !mode.endsWith('-gpu'))
+        result.readback = await readback2d(legacyCanvas, gl, !mode.endsWith('-gpu'), mode.endsWith('-bitmap'))
       }
       if (mode === 'legacy-only') {
         await new Promise(resolve => setTimeout(resolve, 100))
@@ -236,7 +238,7 @@ export async function probeNativeEngine({ mode, basePath }) {
       result.immediate = { lost: gl.isContextLost(), actual: gl.getContextAttributes(), error: gl.getError() }
       if (mode.startsWith('native-readback')) {
         window.__parityStage = 'native-2d-readback'
-        result.readback = readback2d(canvas, gl, !mode.endsWith('-gpu'))
+        result.readback = await readback2d(canvas, gl, !mode.endsWith('-gpu'), mode.endsWith('-bitmap'))
       }
       await new Promise(resolve => setTimeout(resolve, 100))
       result.settledLost = gl.isContextLost()
