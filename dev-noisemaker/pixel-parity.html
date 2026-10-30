@@ -330,10 +330,7 @@
         // the pinned Hydra authority commit 9d29a9f4; the rendered comparison
         // remains formula-bound, not legacy-pixel-bound.
         name: 'sum_reference',
-        reference: (x, y) => {
-          const v = 0.25 * (x + y + 1)
-          return [v, v, v, 1]
-        },
+        reference: [0.25, 0.25, 0.25, 0.25],
         dsl: 'gradient(speed: 0).sum(scale: [0.25, 0.25, 0.25, 0.25])'
       },
       {
@@ -342,7 +339,7 @@
         // Covers the vec4-default resolution through the DSL without an
         // explicit scale argument.
         name: 'sum_default_scale',
-        reference: () => [1, 1, 1, 1],
+        reference: [1, 1, 1, 1],
         dsl: 'gradient(speed: 0).sum()'
       },
       // Non-default parameter values for the 29 catalog effects the cases above
@@ -524,21 +521,66 @@
     )
 
     function referencePixels(fixture) {
-      const data = new Uint8ClampedArray(W * H * 4)
-      for (let py = 0; py < H; py++) {
-        for (let px = 0; px < W; px++) {
-          // Match the GLSL pixel-center mapping: st = gl_FragCoord/resolution.
-          const x = (2 * px + 1) / (2 * W)
-          const y = (2 * py + 1) / (2 * H)
-          const [r, g, b, a] = fixture.reference(x, y)
-          const o = (py * W + px) * 4
-          data[o] = Math.round(Math.min(Math.max(r, 0), 1) * 255)
-          data[o + 1] = Math.round(Math.min(Math.max(g, 0), 1) * 255)
-          data[o + 2] = Math.round(Math.min(Math.max(b, 0), 1) * 255)
-          data[o + 3] = Math.round(Math.min(Math.max(a, 0), 1) * 255)
+      const canvas = document.createElement('canvas')
+      canvas.width = W
+      canvas.height = H
+      const gl = canvas.getContext('webgl2', {
+        antialias: false, alpha: true, premultipliedAlpha: false, preserveDrawingBuffer: true
+      })
+      if (!gl) throw new Error('WebGL2 is required for the sum formula reference')
+      const shaders = []
+      let program
+      try {
+        const compile = (type, source) => {
+          const shader = gl.createShader(type)
+          shaders.push(shader)
+          gl.shaderSource(shader, source)
+          gl.compileShader(shader)
+          if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+            throw new Error(gl.getShaderInfoLog(shader))
+          }
+          return shader
         }
+        const vertex = compile(gl.VERTEX_SHADER, `#version 300 es
+          void main() {
+            vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);
+            gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
+          }`)
+        // Render the pinned Hydra formula directly, independently of the port.
+        // GPU conversion to RGBA8 determines half-step rounding on this device.
+        const fragment = compile(gl.FRAGMENT_SHADER, `#version 300 es
+          precision highp float;
+          uniform vec2 resolution;
+          uniform vec4 scale;
+          out vec4 color;
+          void main() {
+            vec2 st = gl_FragCoord.xy / resolution;
+            vec4 c = vec4(st, 0.0, 1.0);
+            vec4 v = c * scale;
+            color = vec4(vec3(v.r + v.g + v.b + v.a), c.a);
+          }`)
+        program = gl.createProgram()
+        gl.attachShader(program, vertex)
+        gl.attachShader(program, fragment)
+        gl.linkProgram(program)
+        if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+          throw new Error(gl.getProgramInfoLog(program))
+        }
+        gl.useProgram(program)
+        gl.uniform2f(gl.getUniformLocation(program, 'resolution'), W, H)
+        gl.uniform4fv(gl.getUniformLocation(program, 'scale'), fixture.reference)
+        gl.viewport(0, 0, W, H)
+        gl.drawArrays(gl.TRIANGLES, 0, 3)
+        const data = new Uint8Array(W * H * 4)
+        gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, data)
+        const error = gl.getError()
+        if (error !== gl.NO_ERROR) throw new Error(`Sum formula reference WebGL error: ${error}`)
+        return data
+      } finally {
+        if (program) gl.deleteProgram(program)
+        for (const shader of shaders) gl.deleteShader(shader)
+        gl.getExtension('WEBGL_lose_context')?.loseContext()
       }
-      return data
     }
 
     function pixels(canvas) {
