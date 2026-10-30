@@ -27,3 +27,23 @@ test('browser diagnostics preserve console behavior and capture the failing stag
   assert.equal(target.__parityDiagnostics[1].kind, 'unhandledrejection')
   assert.equal(target.__parityDiagnostics[1].error.stack, error.stack)
 })
+
+test('context diagnostics retain actual attributes and loss without replacing the context', () => {
+  const listeners = new Map()
+  const context = { getContextAttributes: () => ({ antialias: true }), isContextLost: () => false }
+  class Canvas {
+    constructor() { this.width = 64; this.height = 48 }
+    getContext() { return context }
+    addEventListener(name, fn) { listeners.set(name, fn) }
+  }
+  const target = { HTMLCanvasElement: Canvas, console: { error() {}, warn() {} }, addEventListener() {} }
+  installBrowserDiagnostics(target)
+  const canvas = new Canvas()
+  assert.equal(canvas.getContext('webgl2', { preserveDrawingBuffer: true }), context)
+  assert.equal(canvas.getContext('webgl2'), context)
+  assert.equal(target.__parityDiagnostics.length, 1)
+  assert.deepEqual(target.__parityDiagnostics[0].actual, { antialias: true })
+  listeners.get('webglcontextlost')({ statusMessage: 'test loss' })
+  assert.equal(target.__parityDiagnostics[1].kind, 'context.lost')
+  assert.equal(target.__parityDiagnostics[1].id, target.__parityDiagnostics[0].id)
+})
