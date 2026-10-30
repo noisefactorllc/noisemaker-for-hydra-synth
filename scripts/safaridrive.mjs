@@ -73,6 +73,15 @@ function repoTrackedHashes() {
   return hashes
 }
 
+async function retainBrowserDiagnostics(sessionId, name) {
+  const result = await driverFetch('POST', `/session/${sessionId}/execute/sync`, {
+    script: 'return { userAgent: navigator.userAgent, stage: window.__parityStage, diagnostics: window.__parityDiagnostics || [] };',
+    args: []
+  })
+  writeFileSync(join(receipts, `${name}-diagnostics.json`), JSON.stringify(result, null, 2))
+  console.log(`[safari] ${name} diagnostics: ${JSON.stringify(result)}`)
+}
+
 async function driverPollSummary(sessionId, timeoutMs, what) {
   return waitFor(async () => {
     const value = await driverFetch('POST', `/session/${sessionId}/execute/sync`, {
@@ -153,6 +162,7 @@ async function safariRunInstalledWorkflow() {
         try {
           await driverFetch('POST', `/session/${sessionId}/url`, { url: `http://127.0.0.1:${cPort}/${page}?cycles=${CYCLES}` })
           const text = await driverPollSummary(sessionId, 300000, `safari installed workflow ${page}`)
+          await retainBrowserDiagnostics(sessionId, `installed-${page.replace(/\.html$/, '')}`)
           const summary = parseSummary(text)
           writeFileSync(join(receipts, `safari-installed-${page.replace(/\.html$/, '')}.log`), text)
           const result = { page, url: `http://127.0.0.1:${cPort}/${page}`, ...summary, expected_ok_minimum: expectOk, pass: summary.fail === 0 && summary.ok >= expectOk }
@@ -259,6 +269,7 @@ try {
       return value
     }, 240000, 'safari sweep summary')
     writeFileSync(join(receipts, 'safari-sweep.log'), text)
+    await retainBrowserDiagnostics(sessionId, 'sweep')
 
     const version = await driverFetch('GET', `/session/${sessionId}`).catch(() => ({}))
     console.log(`[safari] browser=${version.browserName || 'safari'} version=${version.version || 'unknown'}`)

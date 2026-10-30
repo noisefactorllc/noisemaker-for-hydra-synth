@@ -22,9 +22,11 @@
       loadEngine,
       loadHydraEffects
     } from '../src/index.js'
+    import { describeBrowserError, installBrowserDiagnostics } from '../scripts/browser-diagnostics.mjs'
     import glslFunctions from '../src/glsl/glsl-functions.js'
     import { isExecutableHydraEffect } from '../src/engine/hydraGlsl.js'
 
+    installBrowserDiagnostics()
     const log = document.getElementById('log')
     // Sweep canvas size is overridable for size-coverage sweeps: the runner
     // executes this page at the default 64x64 and at 96x48 (?w=96&h=48).
@@ -730,16 +732,21 @@
       const CASES_PARAM = new URLSearchParams(location.search).get('cases')
       const WANTED = CASES_PARAM ? new Set(CASES_PARAM.split(',').map(s => s.trim()).filter(Boolean)) : null
       const want = name => !WANTED || WANTED.has(name)
+      window.__parityStage = 'create legacy'
       const legacy = createLegacy(legacyCanvas)
+      window.__parityStage = 'load engine'
       const noisemakerEngine = await loadEngine()
       const nativeCompile = noisemakerEngine.CanvasRenderer.prototype.compile
+      window.__parityStage = 'create ported'
       const ported = await createPorted(portedCanvas)
       let ok = 0
       let fail = 0
 
       for (const fixture of FIXTURES) {
         if (!want(fixture.name)) continue
+        window.__parityStage = `reference ${fixture.name}`
         const expected = fixture.reference ? referencePixels(fixture) : renderLegacy(legacy, legacyCanvas, fixture)
+        window.__parityStage = `render ${fixture.name}`
         const actual = await renderPorted(ported, portedCanvas, fixture)
         const result = compare(actual, expected)
         if (result.differingBytes === 0) {
@@ -862,6 +869,7 @@
 
       emit(`=== ${ok} ok, ${fail} fail / ${ok + fail} total ===`)
     } catch (error) {
+      window.__parityDiagnostics.push({ kind: 'caught', stage: window.__parityStage, error: describeBrowserError(error) })
       emit(`THROW parity_fixture  →  ${errorText(error)}`)
       emit(`=== 0 ok, 1 fail / ${FIXTURES.length + 1} total ===`)
     }

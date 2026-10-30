@@ -12,6 +12,7 @@
  * identity without affecting the ok/fail accounting.
  */
 
+import { describeBrowserError, installBrowserDiagnostics } from '../scripts/browser-diagnostics.mjs'
 import { deflateSync } from 'node:zlib'
 
 // Minimal PNG encoder (8-bit RGBA, filter 0 per row) for the external image.
@@ -80,10 +81,14 @@ export function pageHtml(preload) {
 </head><body><div id="log"></div>
 ${preload}
 <script type="module">
+const describeBrowserError = ${String(describeBrowserError)}
+const installBrowserDiagnostics = ${String(installBrowserDiagnostics)}
+installBrowserDiagnostics()
 const log = document.getElementById('log')
 const emit = line => { const d = document.createElement('div'); d.textContent = line; log.appendChild(d) }
 let ok = 0, fail = 0
 const check = (name, pass, detail) => {
+  window.__parityStage = name
   if (pass) { emit('ok ' + name); ok++ } else { emit('FAIL ' + name + ' -> ' + detail); fail++ }
 }
 {
@@ -106,7 +111,7 @@ const errorText = error => {
   try { return JSON.stringify(error) } catch (_) { return String(error) }
 }
 window.__finish = () => emit('=== ' + ok + ' ok, ' + fail + ' fail / ' + (ok + fail) + ' total ===')
-window.__error = error => { emit('THROW page -> ' + errorText(error)); emit('=== ' + ok + ' ok, ' + (fail + 1) + ' fail / ' + (ok + fail + 1) + ' total ===') }
+window.__error = error => { window.__parityDiagnostics.push({ kind: 'caught', stage: window.__parityStage, error: describeBrowserError(error) }); emit('THROW page -> ' + errorText(error)); emit('=== ' + ok + ' ok, ' + (fail + 1) + ' fail / ' + (ok + fail + 1) + ' total ===') }
 
 // One shared 2d canvas serves every pixel readback: creating a fresh 2d
 // canvas + context per call retains one extra context per call (the browser
