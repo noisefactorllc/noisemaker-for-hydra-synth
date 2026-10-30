@@ -21,6 +21,7 @@ import { join, resolve } from 'node:path'
 import { spawn, spawnSync, execFileSync } from 'node:child_process'
 import { materializeLegacyBundle, cleanupScratchBundle } from './upstream-bundle.mjs'
 import assert from 'node:assert/strict'
+import { probeWebGLContexts } from './browser-diagnostics.mjs'
 import { BUNDLE_PAGE_BODY, MODULE_PAGE_BODY, encodeTestPng, pageHtml, parseSummary } from '../test/installed-workflow-page.mjs'
 
 const PORT = Number(process.env.HYDRA_SAFARI_PORT || 43125)
@@ -71,6 +72,22 @@ function repoTrackedHashes() {
       .digest('hex')
   }
   return hashes
+}
+
+async function retainFreshWebGLProbe() {
+  const session = await driverFetch('POST', '/session', {
+    capabilities: { alwaysMatch: { browserName: 'safari' } }
+  })
+  const sessionId = session.sessionId
+  try {
+    const result = await driverFetch('POST', `/session/${sessionId}/execute/sync`, {
+      script: `return (${String(probeWebGLContexts)})();`, args: []
+    })
+    writeFileSync(join(receipts, 'fresh-webgl-probe.json'), JSON.stringify(result, null, 2))
+    console.log(`[safari] fresh WebGL probe: ${JSON.stringify(result)}`)
+  } finally {
+    await driverFetch('DELETE', `/session/${sessionId}`).catch(() => {})
+  }
 }
 
 async function retainBrowserDiagnostics(sessionId, name) {
@@ -249,6 +266,8 @@ try {
       const r = await fetch(`http://127.0.0.1:${PORT}${SWEEP_PATH}`)
       if (!r.ok) throw new Error('not up')
     }, 30000, 'http-server')
+
+    await retainFreshWebGLProbe()
 
     const session = await driverFetch('POST', '/session', {
       capabilities: { alwaysMatch: { browserName: 'safari' } }
