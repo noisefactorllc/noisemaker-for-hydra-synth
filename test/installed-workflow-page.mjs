@@ -13,6 +13,7 @@
  */
 
 import { describeBrowserError, installBrowserDiagnostics } from '../scripts/browser-diagnostics.mjs'
+import { captureFramebuffer } from '../scripts/framebuffer-pixels.mjs'
 import { deflateSync } from 'node:zlib'
 
 // Minimal PNG encoder (8-bit RGBA, filter 0 per row) for the external image.
@@ -113,18 +114,17 @@ const errorText = error => {
 window.__finish = () => emit('=== ' + ok + ' ok, ' + fail + ' fail / ' + (ok + fail) + ' total ===')
 window.__error = error => { window.__parityDiagnostics.push({ kind: 'caught', stage: window.__parityStage, error: describeBrowserError(error) }); emit('THROW page -> ' + errorText(error)); emit('=== ' + ok + ' ok, ' + (fail + 1) + ' fail / ' + (ok + fail + 1) + ' total ===') }
 
-// One shared 2d canvas serves every pixel readback: creating a fresh 2d
-// canvas + context per call retains one extra context per call (the browser
-// never reclaims them mid-run), which doubles the page's active-context
-// count under sustained soaks and triggers WebKit's forced evictions.
-const shared2d = document.createElement('canvas')
-const shared2dCtx = shared2d.getContext('2d', { willReadFrequently: true })
+const captureFramebuffer = ${String(captureFramebuffer)}
 const meaningful = (canvas, threshold = 5000) => {
-  shared2d.width = canvas.width; shared2d.height = canvas.height
-  shared2dCtx.drawImage(canvas, 0, 0)
-  const data = shared2dCtx.getImageData(0, 0, shared2d.width, shared2d.height).data
+  const { data, priorErrors } = captureFramebuffer(canvas)
+  if (priorErrors.length) emit('capture: pre-existing WebGL errors ' + priorErrors.join(','))
   let lit = 0
-  for (let i = 0; i < data.length; i += 4) if (data[i] + data[i + 1] + data[i + 2] > 0) lit++
+  // These installed-workflow programs produce opaque frames. Check that
+  // premise so raw channels retain their previous snapshot interpretation.
+  for (let i = 0; i < data.length; i += 4) {
+    if (data[i + 3] !== 255) throw new Error('Installed-workflow framebuffer must be opaque')
+    if (data[i] + data[i + 1] + data[i + 2] > 0) lit++
+  }
   window.__lastPixels = data
   return { lit, total: data.length / 4, data }
 }

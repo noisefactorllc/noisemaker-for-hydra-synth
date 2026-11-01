@@ -23,6 +23,7 @@
       loadHydraEffects
     } from '../src/index.js'
     import { describeBrowserError, installBrowserDiagnostics } from '../scripts/browser-diagnostics.mjs'
+    import { captureFramebuffer, assertComparableFrames } from '../scripts/framebuffer-pixels.mjs'
     import glslFunctions from '../src/glsl/glsl-functions.js'
     import { isExecutableHydraEffect } from '../src/engine/hydraGlsl.js'
 
@@ -30,7 +31,7 @@
     const log = document.getElementById('log')
     // Sweep canvas size is overridable for size-coverage sweeps: the runner
     // executes this page at the default 64x64 and at 96x48 (?w=96&h=48).
-    // Defaults preserve the historical 64x64 bytes exactly.
+    // Defaults preserve the historical canvas dimensions.
     const sizeParams = new URLSearchParams(location.search)
     const W = Number(sizeParams.get('w')) || 64
     const H = Number(sizeParams.get('h')) || 64
@@ -585,16 +586,28 @@
       }
     }
 
+    const frameMetadata = new WeakMap()
     function pixels(canvas) {
-      const copy = document.createElement('canvas')
-      copy.width = canvas.width
-      copy.height = canvas.height
-      const context = copy.getContext('2d', { willReadFrequently: true })
-      context.drawImage(canvas, 0, 0)
-      return context.getImageData(0, 0, copy.width, copy.height).data
+      const frame = captureFramebuffer(canvas)
+      if (frame.priorErrors.length) emit(`capture ${canvas.id}: pre-existing WebGL errors ${frame.priorErrors.join(',')}`)
+      frameMetadata.set(frame.data, frame)
+      return frame.data
     }
 
     function compare(actual, expected) {
+      const actualFrame = frameMetadata.get(actual), expectedFrame = frameMetadata.get(expected)
+      if (!actualFrame) throw new Error('Candidate framebuffer metadata is missing')
+      if (expectedFrame) assertComparableFrames(actualFrame, expectedFrame)
+      else {
+        // The independent sum formula already supplies opaque RGBA8 bytes in
+        // its established order. Preserve that authority without conversion.
+        if (actualFrame.colorSpace !== 'srgb' || actual.length !== expected.length) {
+          throw new Error('Independent reference capture format differs')
+        }
+        for (let i = 3; i < actual.length; i += 4) {
+          if (actual[i] !== 255 || expected[i] !== 255) throw new Error('Independent reference must be opaque')
+        }
+      }
       let differingBytes = 0
       let maxDelta = 0
       for (let i = 0; i < actual.length; i++) {
