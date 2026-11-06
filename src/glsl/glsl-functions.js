@@ -194,7 +194,14 @@ export default () => [
    float a = atan(st.x,st.y)+3.1416;
    float r = (2.*3.1416)/sides;
    float d = cos(floor(.5+a/r)*r-a)*length(st);
-   return vec4(vec3(1.0-smoothstep(radius,radius + smoothing + 0.0000001,d)), 1.0);`
+   // Zero smoothing is a hard edge, as in the upstream polygon fix: the
+   // mask is zero at d == radius. smoothstep() with equal edges is
+   // undefined, and the epsilon ramp is only its near-edge stand-in.
+   float m = float(d < radius);
+   if (smoothing > 0.0) {
+     m = 1.0 - smoothstep(radius,radius + smoothing + 0.0000001,d);
+   }
+   return vec4(vec3(m), 1.0);`
 },
 {
   name: 'gradient',

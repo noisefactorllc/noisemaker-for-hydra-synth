@@ -520,6 +520,14 @@
         time: 0.25,
         legacy: hydra => hydra.synth.shape(4, 0.5, 0.2).a(0.6, 0.2),
         dsl: 'shape(sides: 4, radius: 0.5, smoothing: 0.2).a(scale: 0.6, offset: 0.2)'
+      },
+      // Zero smoothing takes the hard edge: the mask is zero at d == radius
+      // (the upstream polygon fix), not the epsilon ramp's foreground value.
+      {
+        name: 'nondefault_shape_zero_smoothing',
+        time: 0.25,
+        legacy: hydra => hydra.synth.shape(3, 0.3, 0),
+        dsl: 'shape(sides: 3, radius: 0.3, smoothing: 0)'
       }
     )
 
