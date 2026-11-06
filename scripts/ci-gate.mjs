@@ -74,18 +74,18 @@ let addedUpstream = false
 // workflow authority (the qualified macOS host record for the legacy
 // 58-case suite is 58/58 exact). A complete expected-case inventory is
 // not claimed by this runner.
-// The page emits 109 cases per size sweep (the page runs once at 64x64 and
+// The page emits its case set per size sweep (the page runs once at 64x64 and
 // once at 96x48 via ?w=96&h=48): `sum` was never a generated legacy case (the
 // authority bundle's sum shader cannot compile) and stays excluded there;
 // `sum_reference`, `sum_default_scale`, the fifteen parameter-matrix cases
 // (nine bounded points plus the explicit second-time-point coverage),
 // `rotate_animated_uniform_parameter` and the two generator second-time-point
 // cases (`osc_nonzero_time_t075`, `voronoi_src_t075`) were added on top
-// of the original generated fixtures, and 30 `nondefault_*` cases run the
+// of the original generated fixtures, and the `nondefault_*` cases run the
 // effects the rest of the page covers only at defaults with non-default
 // values (including `nondefault_shape_zero_smoothing`, the hard-edge zero
 // smoothing of `shape`), and `stateful_feedback_converge` runs a self-reading
-// chain over 25 frames. Denominator is 109 per sweep.
+// chain over 25 frames. TOTAL_CASES states the per-sweep denominator.
 const TOTAL_CASES = 109
 export { TOTAL_CASES }
 
