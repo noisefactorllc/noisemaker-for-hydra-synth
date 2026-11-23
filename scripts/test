@@ -22,18 +22,119 @@
  */
 import { spawnSync } from 'node:child_process'
 import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, relative, resolve, sep } from 'node:path'
 import { trackedTreeHash } from './tree-hash.mjs'
 import { TOTAL_CASES } from './ci-gate.mjs'
 
-const tests = readdirSync(join(process.cwd(), 'test'))
+/**
+ * Operator rule: when NM_CHANGED_FILES lists the candidate's changed paths
+ * (one per line), run only the tests that exercise those paths, and keep
+ * every such test. A unit module is selected when its source names any key
+ * of a changed path (the path, its extension-less forms and basenames). The
+ * rendered sweep exercises the port's whole browser surface, so a change
+ * under src/, dev-noisemaker/, dist/ or assets/, a change to a file the
+ * sweep launches or reads, or a change to this runner selects it too. A
+ * change to this runner itself exercises everything, so it selects the
+ * whole suite. Unset, the entrypoint runs the whole suite exactly as
+ * before. When a selection would still exceed one invocation's time budget,
+ * NM_SHARD_COUNT and NM_SHARD_INDEX (from 0) split the selected unit
+ * modules deterministically by original list position, so the shards
+ * together run every selected module; sharding applies only when
+ * NM_CHANGED_FILES is set. A selection that exercises no changed path fails
+ * the run instead of passing with zero coverage.
+ */
+const RUNNER_PATH = 'scripts/test'
+const SWEEP_ROOTS = [
+  'src/',
+  'dev-noisemaker/',
+  'dist/',
+  'assets/',
+  'package.json',
+  'package-lock.json',
+  'scripts/test.mjs',
+  'scripts/chrome-dump.mjs',
+  'scripts/ci-gate.mjs',
+  'scripts/sweep-case-set.mjs',
+  'scripts/upstream-bundle.mjs',
+  'scripts/framebuffer-pixels.mjs',
+  'scripts/tree-hash.mjs',
+  'scripts/browser-diagnostics.mjs'
+]
+
+function parseChangedPaths(value) {
+  if (value === undefined) return null
+  return String(value).split('\n').map(line => line.trim()).filter(Boolean)
+}
+
+function changedPathKeys(changedPath) {
+  const rel = relative(process.cwd(), resolve(process.cwd(), changedPath)).split(sep).join('/')
+  const base = rel.slice(rel.lastIndexOf('/') + 1)
+  return [rel, rel.replace(/\.[^.]+$/, ''), base, base.replace(/\.[^.]+$/, '')]
+}
+
+function sweepSelected(keys) {
+  return keys.some(rel =>
+    SWEEP_ROOTS.some(root =>
+      rel === root.replace(/\/$/, '') || rel.startsWith(root)))
+}
+
+function moduleExercises(file, keys) {
+  if (keys.includes(file)) return true
+  let content = ''
+  try { content = readFileSync(join(process.cwd(), file), 'utf8') } catch { return false }
+  return keys.some(key => content.includes(key))
+}
+
+const allTests = readdirSync(join(process.cwd(), 'test'))
   .filter(f => f.endsWith('.test.mjs'))
   .map(f => join('test', f))
-const unit = spawnSync(process.execPath, ['--test', ...tests], {
-  stdio: 'inherit',
-  maxBuffer: 32 * 1024 * 1024
-})
-if (unit.status !== 0) process.exit(unit.status ?? 1)
+const changedPaths = parseChangedPaths(process.env.NM_CHANGED_FILES)
+let unitTests = allTests
+let runSweep = true
+if (changedPaths !== null) {
+  const keys = changedPaths.flatMap(changedPathKeys)
+  const selected = new Set()
+  if (keys.includes(RUNNER_PATH)) {
+    // A change to this runner exercises every module, so it selects the
+    // whole suite (sharding below still splits it deterministically).
+    allTests.forEach((_, i) => selected.add(i))
+  } else {
+    allTests.forEach((file, i) => { if (moduleExercises(file, keys)) selected.add(i) })
+    runSweep = sweepSelected(keys)
+  }
+  // Zero coverage fails before sharding: an empty selection cannot honor
+  // the rule that every changed path's tests run. An empty SHARD slice is
+  // different - the other shards run the selection, so the union keeps
+  // full coverage and this shard passes with nothing to run.
+  if (selected.size === 0 && !runSweep) {
+    console.error('NM_CHANGED_FILES: no test exercises the changed paths; fix the paths or the selection rules in scripts/test')
+    process.exit(1)
+  }
+  const count = Number.parseInt(process.env.NM_SHARD_COUNT ?? '', 10)
+  const index = Number.parseInt(process.env.NM_SHARD_INDEX ?? '', 10)
+  const shard = Number.isInteger(count) && count >= 1 &&
+    Number.isInteger(index) && index >= 0 && index < count
+    ? { count, index }
+    : null
+  if (shard) {
+    unitTests = allTests.filter((_, i) => selected.has(i) && i % shard.count === shard.index)
+  } else {
+    unitTests = allTests.filter((_, i) => selected.has(i))
+  }
+  console.log(`NM_CHANGED_FILES: ${unitTests.length} of ${allTests.length} unit modules, rendered sweep ${runSweep ? 'selected' : 'not selected'}`)
+}
+if (unitTests.length > 0) {
+  const unit = spawnSync(process.execPath, ['--test', ...unitTests], {
+    stdio: 'inherit',
+    maxBuffer: 32 * 1024 * 1024
+  })
+  if (unit.status !== 0) process.exit(unit.status ?? 1)
+}
+
+if (!runSweep) {
+  console.log('[scripts/test] rendered sweep not selected; stopping after the unit selection')
+  process.exit(0)
+}
 
 const local = spawnSync(process.execPath, ['scripts/test.mjs'], {
   stdio: ['inherit', 'pipe', 'inherit'],
