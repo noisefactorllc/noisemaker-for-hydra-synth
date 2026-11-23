@@ -26,23 +26,6 @@ import { join, relative, resolve, sep } from 'node:path'
 import { trackedTreeHash } from './tree-hash.mjs'
 import { TOTAL_CASES } from './ci-gate.mjs'
 
-/**
- * Operator rule: when NM_CHANGED_FILES lists the candidate's changed paths
- * (one per line), run only the tests that exercise those paths, and keep
- * every such test. A unit module is selected when its source names any key
- * of a changed path (the path, its extension-less forms and basenames). The
- * rendered sweep exercises the port's whole browser surface, so a change
- * under src/, dev-noisemaker/, dist/ or assets/, a change to a file the
- * sweep launches or reads, or a change to this runner selects it too. A
- * change to this runner itself exercises everything, so it selects the
- * whole suite. Unset, the entrypoint runs the whole suite exactly as
- * before. When a selection would still exceed one invocation's time budget,
- * NM_SHARD_COUNT and NM_SHARD_INDEX (from 0) split the selected unit
- * modules deterministically by original list position, so the shards
- * together run every selected module; sharding applies only when
- * NM_CHANGED_FILES is set. A selection that exercises no changed path fails
- * the run instead of passing with zero coverage.
- */
 const RUNNER_PATH = 'scripts/test'
 const SWEEP_ROOTS = [
   'src/',
@@ -95,17 +78,11 @@ if (changedPaths !== null) {
   const keys = changedPaths.flatMap(changedPathKeys)
   const selected = new Set()
   if (keys.includes(RUNNER_PATH)) {
-    // A change to this runner exercises every module, so it selects the
-    // whole suite (sharding below still splits it deterministically).
     allTests.forEach((_, i) => selected.add(i))
   } else {
     allTests.forEach((file, i) => { if (moduleExercises(file, keys)) selected.add(i) })
     runSweep = sweepSelected(keys)
   }
-  // Zero coverage fails before sharding: an empty selection cannot honor
-  // the rule that every changed path's tests run. An empty SHARD slice is
-  // different - the other shards run the selection, so the union keeps
-  // full coverage and this shard passes with nothing to run.
   if (selected.size === 0 && !runSweep) {
     console.error('NM_CHANGED_FILES: no test exercises the changed paths; fix the paths or the selection rules in scripts/test')
     process.exit(1)
