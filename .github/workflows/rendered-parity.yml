@@ -5,7 +5,7 @@ name: Rendered parity
 # run weekly and on demand.
 on:
   push:
-    branches: [main]
+    branches: [main, 2.x]
   workflow_dispatch:
   schedule:
     - cron: '53 7 * * 1'
