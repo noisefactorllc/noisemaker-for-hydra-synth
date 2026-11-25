@@ -46,6 +46,19 @@ test('fuses coordinate effects into their upstream Hydra source', () => {
   assert.match(shader, /fragColor = _hydra_node_1\(_st\);/)
 })
 
+test('element IDs preserve fused shader bytes and positional surface ownership', () => {
+  const plain = compiledPlan([
+    { op: 'hydra.gradient', args: { speed: 0 }, from: null, temp: 0 },
+    { op: 'hydra.invert', args: { amount: 1 }, from: 0, temp: 1 }
+  ])
+  const tagged = structuredClone(plain)
+  tagged.plans[0].chain.forEach((step, i) => { step.args._id = `element_${i}` })
+  const expected = buildHydraShaderOverrides(plain)
+  assert.ok(expected.shaderOverrides[1].invert.glsl)
+  assert.deepEqual(expected.outputSurfaces, ['o0'])
+  assert.deepEqual(buildHydraShaderOverrides(tagged), expected)
+})
+
 test('fuses effects targeting upper output surface boundary o7', () => {
   const compiled = compiledPlan([
     {
