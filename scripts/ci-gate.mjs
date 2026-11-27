@@ -86,7 +86,7 @@ let addedUpstream = false
 // values (including `nondefault_shape_zero_smoothing`, the hard-edge zero
 // smoothing of `shape`), and `stateful_feedback_converge` runs a self-reading
 // chain over 25 frames. TOTAL_CASES states the per-sweep denominator.
-const TOTAL_CASES = 111
+const TOTAL_CASES = 119
 export { TOTAL_CASES }
 
 function startServer(port) {

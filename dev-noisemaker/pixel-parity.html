@@ -27,9 +27,9 @@
     import { isExecutableHydraEffect } from '../src/engine/hydraGlsl.js'
 
     installBrowserDiagnostics()
-    const ENGINE_CDN = 'https://shaders.noisedeck.app/1.5.3'
-    const ENGINE_SOURCE = '24250c8c69610017b1413ccb9dc29a627663a790'
-    const ENGINE_SHA256 = '5b8b27b7a50dbc7e2502934dc0421959cdb385c60499d57fda924e3e70b8a70f'
+    const ENGINE_CDN = 'https://shaders.noisedeck.app/1.5.17'
+    const ENGINE_SOURCE = '5596e69fd6e3b9014e9df0f8674e10e70c332e11'
+    const ENGINE_SHA256 = '444352ef03f49edf0389c034fbdca7a6e0a0648af5b47a8fc799ae5470b0512f'
     const log = document.getElementById('log')
     // Sweep canvas size is overridable for size-coverage sweeps: the runner
     // executes this page at the default 64x64 and at 96x48 (?w=96&h=48).
@@ -47,7 +47,7 @@
       const metadataResponse = await fetch(`${ENGINE_CDN}/deployment-meta.json`)
       if (!metadataResponse.ok) throw new Error('Engine deployment identity unavailable')
       const metadata = await metadataResponse.json()
-      if (metadata.git_hash !== ENGINE_SOURCE || metadata.version !== '1.5.3') {
+      if (metadata.git_hash !== ENGINE_SOURCE || metadata.version !== '1.5.17') {
         throw new Error('Engine deployment identity does not match the parity pin')
       }
       const response = await fetch(`${ENGINE_CDN}/noisemaker-shaders-core.esm.min.js`)
@@ -560,6 +560,57 @@
       }
     )
 
+    FIXTURES.push(
+      {
+        name: 'storage_direct_output',
+        legacy: hydra => hydra.synth.solid(0, 1, 1, 1),
+        search: 'hydra, user',
+        dsl: 'storageDirectProbe().invert(amount: 1)'
+      },
+      {
+        name: 'storage_named_output',
+        legacy: hydra => hydra.synth.solid(0, 1, 1, 1),
+        search: 'hydra, user',
+        dsl: 'storageNamedProbe().invert(amount: 1)'
+      },
+      {
+        name: 'blend_one_zero',
+        legacy: hydra => hydra.synth.solid(0.5, 0.5, 0.5, 0.5),
+        search: 'hydra, user',
+        dsl: 'blendOneZeroProbe()'
+      },
+      {
+        name: 'blend_zero_one',
+        legacy: hydra => hydra.synth.solid(0.25, 0.5, 1, 1),
+        search: 'hydra, user',
+        dsl: 'blendZeroOneProbe()'
+      },
+      {
+        name: 'blend_src_color_zero',
+        legacy: hydra => hydra.synth.solid(0.25, 0.25, 0.25, 0.25),
+        search: 'hydra, user',
+        dsl: 'blendSrcColorProbe()'
+      },
+      {
+        name: 'blend_dst_color_zero',
+        legacy: hydra => hydra.synth.solid(0.125, 0.25, 0.5, 0.5),
+        search: 'hydra, user',
+        dsl: 'blendDstColorProbe()'
+      },
+      {
+        name: 'blend_one_minus_src_color_zero',
+        legacy: hydra => hydra.synth.solid(0.25, 0.25, 0.25, 0.25),
+        search: 'hydra, user',
+        dsl: 'blendOneMinusSrcColorProbe()'
+      },
+      {
+        name: 'blend_one_minus_dst_color_zero',
+        legacy: hydra => hydra.synth.solid(0.375, 0.25, 0, 0),
+        search: 'hydra, user',
+        dsl: 'blendOneMinusDstColorProbe()'
+      }
+    )
+
     function referencePixels(fixture) {
       const canvas = document.createElement('canvas')
       canvas.width = W
@@ -736,7 +787,48 @@
 
     async function createPorted(canvas) {
       const engine = await loadHydraEffects({ cdn: ENGINE_CDN })
-      return createRenderer(canvas, engine)
+      const renderer = await createRenderer(canvas, engine)
+      const shader = color => ({ glsl: `#version 300 es
+precision highp float;
+out vec4 fragColor;
+void main() { fragColor = vec4(${color}); }` })
+      const copy = { glsl: `#version 300 es
+precision highp float;
+uniform sampler2D workTex;
+out vec4 fragColor;
+void main() { fragColor = texelFetch(workTex, ivec2(gl_FragCoord.xy), 0); }` }
+      for (const target of ['outputTex', 'work']) {
+        const name = target === 'work' ? 'storageNamedProbe' : 'storageDirectProbe'
+        await renderer.registerPortableEffect({
+          namespace: 'user', name, func: name, globals: {},
+          ...(target === 'work' ? {
+            textures: { work: { width: '100%', height: '100%', format: 'rgba8unorm' } },
+            outputTex: 'work'
+          } : {}),
+          shaders: { fill: shader('1.0, 0.0, 0.0, 1.0') },
+          passes: [{ type: 'compute', program: 'fill', storageTextures: { outputBuffer: target } }]
+        })
+      }
+      for (const [name, blend] of [
+        ['blendOneZeroProbe', ['ONE', 'ZERO']],
+        ['blendZeroOneProbe', ['ZERO', 'ONE']],
+        ['blendSrcColorProbe', ['SRC_COLOR', 'ZERO']],
+        ['blendDstColorProbe', ['DST_COLOR', 'ZERO']],
+        ['blendOneMinusSrcColorProbe', ['ONE_MINUS_SRC_COLOR', 'ZERO']],
+        ['blendOneMinusDstColorProbe', ['ONE_MINUS_DST_COLOR', 'ZERO']]
+      ]) {
+        await renderer.registerPortableEffect({
+          namespace: 'user', name, func: name, globals: {},
+          textures: { work: { width: '100%', height: '100%', format: 'rgba16f' } },
+          shaders: { backdrop: shader('0.25, 0.5, 1.0, 1.0'), source: shader('0.5, 0.5, 0.5, 0.5'), copy },
+          passes: [
+            { program: 'backdrop', outputs: { fragColor: 'work' } },
+            { program: 'source', blend, outputs: { fragColor: 'work' } },
+            { program: 'copy', inputs: { workTex: 'work' }, outputs: { fragColor: 'outputTex' } }
+          ]
+        })
+      }
+      return renderer
     }
 
     async function renderPorted(renderer, canvas, fixture) {
@@ -746,7 +838,7 @@
         renderer.pipeline.globalUniforms.resolution = [W, H]
         for (let i = 0; i < fixture.setupFrames; i++) renderer.pipeline.render(0)
       }
-      await renderer.compile(`search hydra\n${fixture.dsl}.write(o0)`)
+      await renderer.compile(`search ${fixture.search || 'hydra'}\n${fixture.dsl}.write(o0)`)
       const time = fixture.time || 0
       renderer.pipeline.graph.renderSurface = 'o0'
       renderer.pipeline.globalUniforms.time = time
