@@ -27,9 +27,9 @@
     import { isExecutableHydraEffect } from '../src/engine/hydraGlsl.js'
 
     installBrowserDiagnostics()
-    const ENGINE_CDN = 'https://shaders.noisedeck.app/1.5.25'
-    const ENGINE_SOURCE = '688794aca5998d9573afa5601c2b9b023c896007'
-    const ENGINE_SHA256 = '0ecbf46370bc0588e7a679550cc1a7e807b59c8bc8d0f6becb6e67194476deba'
+    const ENGINE_CDN = 'https://shaders.noisedeck.app/1.5.28'
+    const ENGINE_SOURCE = 'e9b3713380e14e1bc847f1ff7b78c373cad83906'
+    const ENGINE_SHA256 = '051b49023b55e15eb2e63ad3866d17ed6b6173a4776183bcf139a848dbf8726b'
     const log = document.getElementById('log')
     // Sweep canvas size is overridable for size-coverage sweeps: the runner
     // executes this page at the default 64x64 and at 96x48 (?w=96&h=48).
@@ -47,7 +47,7 @@
       const metadataResponse = await fetch(`${ENGINE_CDN}/deployment-meta.json`)
       if (!metadataResponse.ok) throw new Error('Engine deployment identity unavailable')
       const metadata = await metadataResponse.json()
-      if (metadata.git_hash !== ENGINE_SOURCE || metadata.version !== '1.5.25') {
+      if (metadata.git_hash !== ENGINE_SOURCE || metadata.version !== '1.5.28') {
         throw new Error('Engine deployment identity does not match the parity pin')
       }
       const response = await fetch(`${ENGINE_CDN}/noisemaker-shaders-core.esm.min.js`)
